@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 export default defineConfig({
-  base: "/Learn-TS-TON/",
+  base: "/Lean-TS-Pub/",
   plugins: [
     nodePolyfills({
       include: ["buffer", "process"],

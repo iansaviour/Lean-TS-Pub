@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Counter DApp</title>
+    <link rel="icon" href="%BASE_URL%icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@500;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="page">
+      <header class="top">
+        <div>
+          <p class="eyebrow">TON testnet</p>
+          <h1>Counter</h1>
+        </div>
+        <div id="ton-connect"></div>
+      </header>
+
+      <main class="panel">
+        <p id="wallet-line" class="wallet-line">Wallet belum terhubung</p>
+        <p class="counter-label">Nilai counter</p>
+        <p id="counter" class="counter">—</p>
+
+        <dl class="stats">
+          <div>
+            <dt>Saldo kontrak</dt>
+            <dd id="balance">—</dd>
+          </div>
+          <div>
+            <dt>Pengirim terakhir</dt>
+            <dd id="sender">—</dd>
+          </div>
+          <div>
+            <dt>Pemilik</dt>
+            <dd id="owner">—</dd>
+          </div>
+        </dl>
+
+        <div class="actions">
+          <button id="increment" type="button">Tambah +1</button>
+          <label>
+            Setor (TON)
+            <input id="deposit-amount" type="text" inputmode="decimal" value="0.1" />
+          </label>
+          <button id="deposit" type="button">Setor</button>
+          <label>
+            Tarik (TON)
+            <input id="withdraw-amount" type="text" inputmode="decimal" value="0.05" />
+          </label>
+          <button id="withdraw" type="button">Tarik</button>
+        </div>
+        <p id="status" class="status" role="status"></p>
+      </main>
+
+      <footer>
+        <a
+          id="explorer"
+          href="https://testnet.tonscan.org/address/kQC1eFvsm30A-6IiEblGiJpet0O-r1YZa8A1w6nCyeYXY_u0"
+          target="_blank"
+          rel="noreferrer"
+          >Lihat kontrak di tonscan</a
+        >
+        <p>Setiap aksi mengirim 0.05 TON untuk gas, kecuali setor yang memakai jumlah di kolom.</p>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

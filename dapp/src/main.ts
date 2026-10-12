@@ -1,11 +1,11 @@
 import "./style.css";
 import { Address, beginCell, toNano } from "@ton/core";
 import { TonClient } from "@ton/ton";
-import { getHttpEndpoint } from "@orbs-network/ton-access";
 import { TonConnectUI } from "@tonconnect/ui";
 
 const CONTRACT = Address.parse("kQC1eFvsm30A-6IiEblGiJpet0O-r1YZa8A1w6nCyeYXY_u0");
 const TESTNET_CHAIN = "-3";
+const TESTNET_ENDPOINT = "https://testnet.toncenter.com/api/v2/jsonRPC";
 const GAS = toNano("0.05");
 
 const counterEl = document.querySelector<HTMLElement>("#counter")!;
@@ -32,13 +32,11 @@ const tonConnectUI = new TonConnectUI({
 tonConnectUI.setConnectionNetwork(TESTNET_CHAIN);
 
 let owner: Address | null = null;
-let clientPromise: Promise<TonClient> | null = null;
+let tonClient: TonClient | null = null;
 
-function client(): Promise<TonClient> {
-  clientPromise ??= getHttpEndpoint({ network: "testnet" }).then(
-    (endpoint) => new TonClient({ endpoint })
-  );
-  return clientPromise;
+function client(): TonClient {
+  tonClient ??= new TonClient({ endpoint: TESTNET_ENDPOINT });
+  return tonClient;
 }
 
 function setStatus(message: string, isError = false) {

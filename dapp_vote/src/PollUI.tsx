@@ -47,7 +47,7 @@ export default function PollUI() {
             throw new Error('get_votes did not return two numbers.');
         }
         setCounts({ yes: stackNumber(stack[0]), no: stackNumber(stack[1]) });
-        setStatus('Counts come from get_votes().');
+        setStatus('');
     }, []);
 
     useEffect(() => {

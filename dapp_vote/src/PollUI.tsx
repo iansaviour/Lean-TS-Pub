@@ -1,26 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
-import { beginCell, Cell } from '@ton/core';
+import { beginCell } from '@ton/core';
 
-const contractAddress = 'kQCiJymJOLaMU8SvWGs-b8hHMz3AlP56BWk4YM5HIgp4kC2N';
+const contractAddress = 'kQAHdlp6UDGAS6yJwQmuJ4l3l5zoOwa020j-Mll2xgW5cRh9';
 
 type VoteCounts = {
     yes: number;
     no: number;
-    stored: boolean;
 };
 
-function readCounts(dataBoc: string): VoteCounts {
-    const data = Cell.fromBase64(dataBoc).beginParse();
-    if (data.remainingBits === 0) {
-        return { yes: 0, no: 0, stored: false };
+function stackNumber(item: unknown): number {
+    if (!Array.isArray(item) || item[0] !== 'num' || typeof item[1] !== 'string') {
+        throw new Error('get_votes returned an unexpected value.');
     }
-    data.loadAddress();
-    return {
-        yes: data.loadUint(32),
-        no: data.loadUint(32),
-        stored: true,
-    };
+    return Number(BigInt(item[1]));
 }
 
 export default function PollUI() {
@@ -30,20 +23,31 @@ export default function PollUI() {
     const [status, setStatus] = useState('Reading the contract…');
 
     const refresh = useCallback(async () => {
-        const response = await fetch(
-            `https://testnet.toncenter.com/api/v2/getAddressInformation?address=${contractAddress}`,
-        );
+        const response = await fetch('https://testnet.toncenter.com/api/v2/runGetMethod', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ address: contractAddress, method: 'get_votes', stack: [] }),
+        });
         const body = await response.json();
-        if (!body.ok || typeof body.result?.data !== 'string') {
-            throw new Error('The contract state could not be read.');
+        const exitCode = body.result?.exit_code;
+        if (!body.ok || exitCode !== 0) {
+            setCounts(null);
+            if (exitCode === 9) {
+                setStatus('Data cell is empty.');
+                return;
+            }
+            throw new Error(
+                typeof exitCode === 'number'
+                    ? `get_votes failed with exit code ${exitCode}.`
+                    : 'get_votes could not be called.',
+            );
         }
-        const next = readCounts(body.result.data);
-        setCounts(next);
-        setStatus(
-            next.stored
-                ? 'Counts are read from the contract.'
-                : 'The contract was deployed with empty data, so a vote is rejected and both counts stay at 0.',
-        );
+        const stack = body.result?.stack;
+        if (!Array.isArray(stack) || stack.length < 2) {
+            throw new Error('get_votes did not return two numbers.');
+        }
+        setCounts({ yes: stackNumber(stack[0]), no: stackNumber(stack[1]) });
+        setStatus('Counts come from get_votes().');
     }, []);
 
     useEffect(() => {
@@ -106,11 +110,11 @@ export default function PollUI() {
             <section style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem' }}>
                 <div style={{ minWidth: '120px', padding: '1rem', backgroundColor: '#e8f5e9', borderRadius: '8px' }}>
                     <div>Yes</div>
-                    <strong style={{ fontSize: '2rem' }}>{counts ? counts.yes : '…'}</strong>
+                    <strong style={{ fontSize: '2rem' }}>{counts ? counts.yes : '—'}</strong>
                 </div>
                 <div style={{ minWidth: '120px', padding: '1rem', backgroundColor: '#ffebee', borderRadius: '8px' }}>
                     <div>No</div>
-                    <strong style={{ fontSize: '2rem' }}>{counts ? counts.no : '…'}</strong>
+                    <strong style={{ fontSize: '2rem' }}>{counts ? counts.no : '—'}</strong>
                 </div>
             </section>
             <p style={{ marginTop: '1rem', textAlign: 'center' }}>{status}</p>

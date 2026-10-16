@@ -120,6 +120,33 @@ button.link {
   margin-bottom: 24px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+button.lang-switch {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+button.lang-switch span {
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--muted);
+}
+
+button.lang-switch span.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 h1 {
   margin: 0;
   font-size: 28px;

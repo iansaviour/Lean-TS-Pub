@@ -7,6 +7,8 @@ import { readContract } from './contract';
 import type { ContractState } from './contract';
 import CreateQuestion from './CreateQuestion';
 import Home from './Home';
+import { LanguageSwitch, useI18n } from './i18n';
+import type { Messages } from './messages';
 import QuestionCard from './QuestionCard';
 
 const REFRESH_MS = 15_000;
@@ -16,10 +18,10 @@ export type SendMessage = (body: Cell, amount: bigint, label: string) => Promise
 
 export type Page = 'home' | 'create' | 'list';
 
-const PAGES: { id: Page; hash: string; label: string; icon: string }[] = [
-    { id: 'home', hash: '#/', label: 'Home', icon: '⌂' },
-    { id: 'create', hash: '#/buat', label: 'Buat Kuesioner', icon: '+' },
-    { id: 'list', hash: '#/kuesioner', label: 'Kuesioner', icon: '☰' },
+const PAGES: { id: Page; hash: string; label: (t: Messages) => string; icon: string }[] = [
+    { id: 'home', hash: '#/', label: (t) => t.navHome, icon: '⌂' },
+    { id: 'create', hash: '#/buat', label: (t) => t.navCreate, icon: '+' },
+    { id: 'list', hash: '#/kuesioner', label: (t) => t.navList, icon: '☰' },
 ];
 
 type Route = { page: Page; questionId: number | null };
@@ -56,6 +58,7 @@ function useRoute(): [Route, (page: Page) => void] {
 
 export default function Questionnaire() {
     const [{ page, questionId }, go] = useRoute();
+    const { t } = useI18n();
     const [tonConnectUI] = useTonConnectUI();
     const wallet = useTonWallet();
     const [state, setState] = useState<ContractState | null>(null);
@@ -75,7 +78,7 @@ export default function Questionnaire() {
             setState(await readContract(CONTRACT_ADDRESS));
             setError(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Data kontrak gagal dibaca.');
+            setError(err instanceof Error ? err.message : '');
         }
     }, []);
 
@@ -88,7 +91,7 @@ export default function Questionnaire() {
     const send: SendMessage = async (body, amount, label) => {
         if (!walletAddress || !onTestnet) return false;
         setBusy(true);
-        setStatus(`${label}: menunggu konfirmasi di wallet…`);
+        setStatus(t.txWaiting(label));
         try {
             await tonConnectUI.sendTransaction({
                 validUntil: Math.floor(Date.now() / 1000) + 300,
@@ -101,14 +104,14 @@ export default function Questionnaire() {
                     },
                 ],
             });
-            setStatus(`${label}: terkirim. Membaca kontrak lagi…`);
+            setStatus(t.txSent(label));
             window.setTimeout(() => {
                 refresh().then(() => setStatus(null));
             }, AFTER_SEND_MS);
             return true;
         } catch (err) {
             console.error(err);
-            setStatus(`${label}: dibatalkan atau gagal.`);
+            setStatus(t.txFailed(label));
             return false;
         } finally {
             setBusy(false);
@@ -122,14 +125,15 @@ export default function Questionnaire() {
             <header className="header">
                 <div>
                     <p className="eyebrow">TON testnet</p>
-                    <h1>Kuesioner TON</h1>
+                    <h1>{t.appTitle}</h1>
                 </div>
-                <TonConnectButton />
+                <div className="header-actions">
+                    <LanguageSwitch />
+                    <TonConnectButton />
+                </div>
             </header>
 
-            {wallet && !onTestnet && (
-                <p className="notice error">Wallet terhubung ke mainnet. Pindahkan wallet ke testnet lalu hubungkan lagi.</p>
-            )}
+            {wallet && !onTestnet && <p className="notice error">{t.wrongNetwork}</p>}
             {status && <p className="notice">{status}</p>}
 
             <ContractNotice state={state} error={error} />
@@ -152,12 +156,12 @@ export default function Questionnaire() {
 
             {page === 'list' && questionId === null && state?.kind === 'ready' && (
                 <section>
-                    <h2>Kuesioner ({state.questions.length})</h2>
+                    <h2>{t.listTitle(state.questions.length)}</h2>
                     {state.questions.length === 0 && (
                         <p className="muted">
-                            Belum ada pertanyaan.{' '}
+                            {t.listEmpty}{' '}
                             <button type="button" className="link" onClick={() => go('create')}>
-                                Buat yang pertama
+                                {t.listEmptyCta}
                             </button>
                         </p>
                     )}
@@ -182,10 +186,10 @@ export default function Questionnaire() {
                         rel="noreferrer"
                         title={CONTRACT_ADDRESS}
                     >
-                        Contract Address
+                        {t.contractAddress}
                     </a>
                 ) : (
-                    'Contract Address belum diisi'
+                    t.contractAddressMissing
                 )}
             </footer>
 
@@ -199,7 +203,7 @@ export default function Questionnaire() {
                         onClick={() => go(item.id)}
                     >
                         <span className="nav-icon" aria-hidden="true">{item.icon}</span>
-                        <span>{item.label}</span>
+                        <span>{item.label(t)}</span>
                     </button>
                 ))}
             </nav>
@@ -216,12 +220,13 @@ type DetailProps = {
 };
 
 function QuestionDetail({ questionId, state, walletAddress, canAct, send }: DetailProps) {
+    const { t } = useI18n();
     const question = state.questions.find((q) => q.id === questionId);
 
     return (
         <section>
             <a className="back-link" href={PAGES.find((item) => item.id === 'list')!.hash}>
-                ← Semua kuesioner
+                {t.backToList}
             </a>
             {question ? (
                 <QuestionCard
@@ -233,31 +238,28 @@ function QuestionDetail({ questionId, state, walletAddress, canAct, send }: Deta
                     detail
                 />
             ) : (
-                <p className="notice error">Pertanyaan #{questionId} tidak ditemukan di kontrak ini.</p>
+                <p className="notice error">{t.notFound(questionId)}</p>
             )}
         </section>
     );
 }
 
 function ContractNotice({ state, error }: { state: ContractState | null; error: string | null }) {
+    const { t } = useI18n();
     if (!CONTRACT_ADDRESS) {
-        return <p className="notice error">Isi <code>CONTRACT_ADDRESS</code> di <code>src/config.ts</code> dengan alamat kontrak yang sudah di-deploy.</p>;
+        return <p className="notice error">{t.noAddress}</p>;
     }
-    if (error) {
-        return <p className="notice error">{error}</p>;
+    if (error !== null) {
+        return <p className="notice error">{error || t.readFailed}</p>;
     }
     if (!state) {
-        return <p className="notice">Membaca kontrak…</p>;
+        return <p className="notice">{t.reading}</p>;
     }
     if (state.kind === 'missing') {
-        return <p className="notice error">Belum ada kontrak aktif di alamat ini.</p>;
+        return <p className="notice error">{t.missing}</p>;
     }
     if (state.kind === 'empty-data') {
-        return (
-            <p className="notice error">
-                Data awal kontrak kosong. Deploy ulang dengan data: alamat owner, <code>uint32 0</code>, lalu dua dictionary kosong.
-            </p>
-        );
+        return <p className="notice error">{t.emptyData}</p>;
     }
     return null;
 }

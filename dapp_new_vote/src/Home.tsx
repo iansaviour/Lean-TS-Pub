@@ -1,6 +1,7 @@
 import type { ContractState } from './contract';
 import { formatTon } from './contract';
 import { ANSWER_VALUE, CREATE_FEE } from './config';
+import { useI18n } from './i18n';
 import type { Page } from './Questionnaire';
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export default function Home({ state, walletConnected, go }: Props) {
+    const { t } = useI18n();
     const questions = state?.kind === 'ready' ? state.questions : [];
     const open = questions.filter((q) => q.isOpen).length;
     const answers = questions.reduce((sum, q) => sum + q.votes.reduce((a, v) => a + v, 0), 0);
@@ -17,56 +19,49 @@ export default function Home({ state, walletConnected, go }: Props) {
     return (
         <>
             <section className="card">
-                <h2>Selamat datang</h2>
-                <p>
-                    Buat pertanyaan dengan 2–5 pilihan, lalu siapa pun dengan wallet TON testnet bisa menjawab dan
-                    mendapat hadiah TON. Setiap alamat hanya bisa menjawab sekali, dan setiap pertanyaan punya link
-                    sendiri untuk dibagikan.
-                </p>
-                {!walletConnected && <p className="muted">Hubungkan wallet testnet dengan tombol di kanan atas untuk mulai.</p>}
+                <h2>{t.welcome}</h2>
+                <p>{t.intro}</p>
+                {!walletConnected && <p className="muted">{t.connectHint}</p>}
             </section>
 
             {state?.kind === 'ready' && (
                 <section className="stats">
                     <div className="stat">
                         <strong>{questions.length}</strong>
-                        <span>Pertanyaan</span>
+                        <span>{t.statQuestions}</span>
                     </div>
                     <div className="stat">
                         <strong>{open}</strong>
-                        <span>Masih terbuka</span>
+                        <span>{t.statOpen}</span>
                     </div>
                     <div className="stat">
                         <strong>{answers}</strong>
-                        <span>Jawaban</span>
+                        <span>{t.statAnswers}</span>
                     </div>
                 </section>
             )}
 
             <section className="card">
-                <h2>Cara kerja</h2>
+                <h2>{t.howItWorks}</h2>
                 <ol className="steps">
                     <li>
-                        <strong>Buat kuesioner.</strong> Biaya {formatTon(CREATE_FEE)} TON, ditambah pool hadiah. Hadiah
-                        per jawaban harus lebih dari {formatTon(ANSWER_VALUE)} TON, supaya penjawab selalu untung.
+                        <strong>{t.stepCreateTitle}</strong> {t.stepCreate(formatTon(CREATE_FEE), formatTon(ANSWER_VALUE))}
                     </li>
                     <li>
-                        <strong>Jawab kuesioner.</strong> Kirim {formatTon(ANSWER_VALUE)} TON. Sisanya dikembalikan bersama
-                        hadiah, kalau ada.
+                        <strong>{t.stepAnswerTitle}</strong> {t.stepAnswer(formatTon(ANSWER_VALUE))}
                     </li>
                     <li>
-                        <strong>Tutup kapan saja.</strong> Pembuat bisa menutup pertanyaannya dan mengambil sisa pool.
-                        Pertanyaan juga tertutup sendiri saat pool habis.
+                        <strong>{t.stepCloseTitle}</strong> {t.stepClose}
                     </li>
                 </ol>
             </section>
 
             <div className="actions">
                 <button type="button" className="primary" onClick={() => go('create')}>
-                    Buat kuesioner
+                    {t.goCreate}
                 </button>
                 <button type="button" className="ghost" onClick={() => go('list')}>
-                    Lihat kuesioner
+                    {t.goList}
                 </button>
             </div>
         </>

@@ -3,6 +3,7 @@ import type { Address } from '@ton/core';
 import { ANSWER_VALUE, CLOSE_VALUE } from './config';
 import { answerBody, answerKey, closeQuestionBody, formatTon, shortAddress } from './contract';
 import type { Question } from './contract';
+import { useI18n } from './i18n';
 import type { SendMessage } from './Questionnaire';
 import { questionHash, questionUrl } from './routes';
 
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export default function QuestionCard({ question, answered, walletAddress, canAct, send, detail = false }: Props) {
+    const { t } = useI18n();
     const totalVotes = question.votes.reduce((sum, v) => sum + v, 0);
     const hasAnswered = walletAddress ? answered.has(answerKey(question.id, walletAddress)) : false;
     const isCreator = walletAddress ? walletAddress.equals(question.creator) : false;
@@ -29,7 +31,7 @@ export default function QuestionCard({ question, answered, walletAddress, canAct
                 <span className="muted">#{question.id}</span>
                 <div className="question-head-right">
                     <span className={question.isOpen ? 'badge open' : 'badge closed'}>
-                        {question.isOpen ? 'Terbuka' : 'Ditutup'}
+                        {question.isOpen ? t.open : t.closed}
                     </span>
                     <ShareButton questionId={question.id} text={question.text} />
                 </div>
@@ -46,18 +48,16 @@ export default function QuestionCard({ question, answered, walletAddress, canAct
                                 <button
                                     type="button"
                                     className="vote"
-                                    aria-label={`Pilih ${option}`}
-                                    onClick={() => send(answerBody(question.id, i), ANSWER_VALUE, `Jawab #${question.id}`)}
+                                    aria-label={t.voteLabel(option)}
+                                    onClick={() => send(answerBody(question.id, i), ANSWER_VALUE, t.answerTxLabel(question.id))}
                                 >
-                                    Pilih
+                                    {t.vote}
                                 </button>
                             )}
                             <div className="result-body">
                                 <div className="result-label">
                                     <span>{option}</span>
-                                    <span className="muted">
-                                        {votes} suara · {percent}%
-                                    </span>
+                                    <span className="muted">{t.votes(votes, percent)}</span>
                                 </div>
                                 <div className="bar">
                                     <div className="bar-fill" style={{ width: `${percent}%` }} />
@@ -69,26 +69,21 @@ export default function QuestionCard({ question, answered, walletAddress, canAct
             </ul>
 
             <p className="muted">
-                {totalVotes} jawaban · dibuat oleh {shortAddress(question.creator)}
-                {question.rewardPerAnswer > 0n && (
-                    <>
-                        {' '}· hadiah {formatTon(question.rewardPerAnswer)} TON per jawaban · sisa pool{' '}
-                        {formatTon(question.rewardPool)} TON ({paidLeft?.toString()} jawaban lagi)
-                    </>
-                )}
+                {t.summary(totalVotes, shortAddress(question.creator))}
+                {question.rewardPerAnswer > 0n &&
+                    t.rewardSummary(
+                        formatTon(question.rewardPerAnswer),
+                        formatTon(question.rewardPool),
+                        paidLeft?.toString() ?? '0',
+                    )}
             </p>
 
             {question.isOpen && rewardBelowCost && (
-                <p className="notice error">
-                    Hadiah pertanyaan ini tidak lebih dari biaya menjawab ({formatTon(ANSWER_VALUE)} TON), jadi penjawab
-                    bisa menerima kembali lebih sedikit dari yang dikirim.
-                </p>
+                <p className="notice error">{t.rewardBelowCost(formatTon(ANSWER_VALUE))}</p>
             )}
-            {hasAnswered && <p className="notice">Kamu sudah menjawab pertanyaan ini.</p>}
+            {hasAnswered && <p className="notice">{t.alreadyAnswered}</p>}
             {question.isOpen && walletAddress && !hasAnswered && (
-                <p className="muted">
-                    Menjawab mengirim {formatTon(ANSWER_VALUE)} TON. Kontrak mengembalikan sisanya bersama hadiah.
-                </p>
+                <p className="muted">{t.answerCost(formatTon(ANSWER_VALUE))}</p>
             )}
 
             {isCreator && question.isOpen && (
@@ -96,9 +91,9 @@ export default function QuestionCard({ question, answered, walletAddress, canAct
                     type="button"
                     className="danger full-width"
                     disabled={!canAct}
-                    onClick={() => send(closeQuestionBody(question.id), CLOSE_VALUE, `Tutup #${question.id}`)}
+                    onClick={() => send(closeQuestionBody(question.id), CLOSE_VALUE, t.closeTxLabel(question.id))}
                 >
-                    Tutup pertanyaan & ambil sisa pool
+                    {t.closeButton}
                 </button>
             )}
         </article>
@@ -106,6 +101,7 @@ export default function QuestionCard({ question, answered, walletAddress, canAct
 }
 
 function ShareButton({ questionId, text }: { questionId: number; text: string }) {
+    const { t } = useI18n();
     const [copied, setCopied] = useState(false);
 
     const share = async () => {
@@ -123,7 +119,7 @@ function ShareButton({ questionId, text }: { questionId: number; text: string })
         window.setTimeout(() => setCopied(false), 2000);
     };
 
-    const label = copied ? 'Link disalin' : 'Bagikan link';
+    const label = copied ? t.copied : t.share;
 
     return (
         <button type="button" className="icon-button" onClick={share} aria-label={label} title={label}>

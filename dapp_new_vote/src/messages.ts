@@ -1,0 +1,181 @@
+export type Lang = 'id' | 'en';
+
+const id = {
+    appTitle: 'Kuesioner TON',
+    switchTo: 'Switch to English',
+
+    navHome: 'Home',
+    navCreate: 'Buat Kuesioner',
+    navList: 'Kuesioner',
+
+    wrongNetwork: 'Wallet terhubung ke mainnet. Pindahkan wallet ke testnet lalu hubungkan lagi.',
+    readFailed: 'Data kontrak gagal dibaca.',
+    reading: 'Membaca kontrak…',
+    noAddress: 'Isi CONTRACT_ADDRESS di src/config.ts dengan alamat kontrak yang sudah di-deploy.',
+    missing: 'Belum ada kontrak aktif di alamat ini.',
+    emptyData: 'Data awal kontrak kosong. Deploy ulang dengan data: alamat owner, uint32 0, lalu dua dictionary kosong.',
+    contractAddress: 'Contract Address',
+    contractAddressMissing: 'Contract Address belum diisi',
+
+    txWaiting: (label: string) => `${label}: menunggu konfirmasi di wallet…`,
+    txSent: (label: string) => `${label}: terkirim. Membaca kontrak lagi…`,
+    txFailed: (label: string) => `${label}: dibatalkan atau gagal.`,
+
+    welcome: 'Selamat datang',
+    intro:
+        'Buat pertanyaan dengan 2–5 pilihan, lalu siapa pun dengan wallet TON testnet bisa menjawab dan mendapat hadiah TON. Setiap alamat hanya bisa menjawab sekali, dan setiap pertanyaan punya link sendiri untuk dibagikan.',
+    connectHint: 'Hubungkan wallet testnet dengan tombol di kanan atas untuk mulai.',
+    statQuestions: 'Pertanyaan',
+    statOpen: 'Masih terbuka',
+    statAnswers: 'Jawaban',
+    howItWorks: 'Cara kerja',
+    stepCreateTitle: 'Buat kuesioner.',
+    stepCreate: (fee: string, minReward: string) =>
+        `Biaya ${fee} TON, ditambah pool hadiah. Hadiah per jawaban harus lebih dari ${minReward} TON, supaya penjawab selalu untung.`,
+    stepAnswerTitle: 'Jawab kuesioner.',
+    stepAnswer: (value: string) => `Kirim ${value} TON. Sisanya dikembalikan bersama hadiah.`,
+    stepCloseTitle: 'Tutup kapan saja.',
+    stepClose: 'Pembuat bisa menutup pertanyaannya dan mengambil sisa pool. Pertanyaan juga tertutup sendiri saat pool habis.',
+    goCreate: 'Buat kuesioner',
+    goList: 'Lihat kuesioner',
+
+    createTitle: 'Buat kuesioner',
+    questionLabel: 'Pertanyaan',
+    questionPlaceholder: 'Apakah kamu setuju dengan…',
+    optionsLabel: 'Pilihan',
+    optionPlaceholder: (n: number) => `Pilihan ${n}`,
+    removeOption: 'Hapus',
+    addOption: '+ Tambah pilihan',
+    rewardLabel: 'Hadiah per jawaban (TON)',
+    rewardHint: (min: string) => `Harus lebih dari ${min} TON (biaya menjawab).`,
+    paidAnswersLabel: 'Jumlah jawaban berhadiah',
+    totalSent: 'Dikirim:',
+    totalBreakdown: (fee: string, pool: string) =>
+        `(${fee} biaya kontrak + ${pool} TON pool hadiah). Pertanyaan tertutup otomatis saat pool habis, dan pembuat bisa menutupnya kapan saja untuk mengambil sisa pool.`,
+    createButton: 'Buat pertanyaan',
+    createTxLabel: 'Buat pertanyaan',
+    createNeedsWallet: 'Hubungkan wallet testnet untuk membuat pertanyaan.',
+    errQuestionEmpty: 'Pertanyaan belum diisi.',
+    errQuestionLong: (max: number, now: number) => `Pertanyaan maksimal ${max} byte (sekarang ${now}).`,
+    errOptionEmpty: (n: number) => `Pilihan ${n} belum diisi.`,
+    errOptionLong: (n: number, max: number, now: number) => `Pilihan ${n} maksimal ${max} byte (sekarang ${now}).`,
+    errRewardInvalid: 'Hadiah per jawaban bukan angka TON yang valid.',
+    errRewardLow: (min: string) => `Hadiah per jawaban harus lebih dari ${min} TON, yaitu jumlah yang dikirim penjawab.`,
+    errPaidAnswers: 'Jumlah jawaban berhadiah minimal 1.',
+
+    listTitle: (n: number) => `Kuesioner (${n})`,
+    listEmpty: 'Belum ada pertanyaan.',
+    listEmptyCta: 'Buat yang pertama',
+    backToList: '← Semua kuesioner',
+    notFound: (id: number) => `Pertanyaan #${id} tidak ditemukan di kontrak ini.`,
+
+    open: 'Terbuka',
+    closed: 'Ditutup',
+    vote: 'Pilih',
+    voteLabel: (option: string) => `Pilih ${option}`,
+    votes: (n: number, percent: number) => `${n} suara · ${percent}%`,
+    answerTxLabel: (id: number) => `Jawab #${id}`,
+    summary: (answers: number, creator: string) => `${answers} jawaban · dibuat oleh ${creator}`,
+    rewardSummary: (reward: string, pool: string, left: string) =>
+        ` · hadiah ${reward} TON per jawaban · sisa pool ${pool} TON (${left} jawaban lagi)`,
+    rewardBelowCost: (cost: string) =>
+        `Hadiah pertanyaan ini tidak lebih dari biaya menjawab (${cost} TON), jadi penjawab bisa menerima kembali lebih sedikit dari yang dikirim.`,
+    alreadyAnswered: 'Kamu sudah menjawab pertanyaan ini.',
+    answerCost: (value: string) => `Menjawab mengirim ${value} TON. Kontrak mengembalikan sisanya bersama hadiah.`,
+    closeButton: 'Tutup pertanyaan & ambil sisa pool',
+    closeTxLabel: (id: number) => `Tutup #${id}`,
+    share: 'Bagikan link',
+    copied: 'Link disalin',
+};
+
+export type Messages = typeof id;
+
+const en: Messages = {
+    appTitle: 'TON Questionnaire',
+    switchTo: 'Ganti ke Bahasa Indonesia',
+
+    navHome: 'Home',
+    navCreate: 'Create',
+    navList: 'Questionnaires',
+
+    wrongNetwork: 'Your wallet is on mainnet. Switch the wallet to testnet and connect again.',
+    readFailed: 'Could not read the contract data.',
+    reading: 'Reading the contract…',
+    noAddress: 'Set CONTRACT_ADDRESS in src/config.ts to the address of the deployed contract.',
+    missing: 'There is no active contract at this address.',
+    emptyData: 'The contract was deployed with empty data. Redeploy it with: owner address, uint32 0, then two empty dictionaries.',
+    contractAddress: 'Contract Address',
+    contractAddressMissing: 'Contract Address is not set',
+
+    txWaiting: (label) => `${label}: waiting for wallet confirmation…`,
+    txSent: (label) => `${label}: sent. Reading the contract again…`,
+    txFailed: (label) => `${label}: cancelled or failed.`,
+
+    welcome: 'Welcome',
+    intro:
+        'Create a question with 2–5 options, and anyone with a TON testnet wallet can answer it and earn a TON reward. Each address can answer once, and every question has its own link to share.',
+    connectHint: 'Connect a testnet wallet with the button at the top right to get started.',
+    statQuestions: 'Questions',
+    statOpen: 'Still open',
+    statAnswers: 'Answers',
+    howItWorks: 'How it works',
+    stepCreateTitle: 'Create a questionnaire.',
+    stepCreate: (fee, minReward) =>
+        `It costs ${fee} TON plus a reward pool. The reward per answer must be more than ${minReward} TON, so answering always pays off.`,
+    stepAnswerTitle: 'Answer a questionnaire.',
+    stepAnswer: (value) => `Send ${value} TON. The rest comes back together with the reward.`,
+    stepCloseTitle: 'Close at any time.',
+    stepClose: 'The creator can close their question and take back the remaining pool. A question also closes by itself when the pool runs out.',
+    goCreate: 'Create a questionnaire',
+    goList: 'Browse questionnaires',
+
+    createTitle: 'Create a questionnaire',
+    questionLabel: 'Question',
+    questionPlaceholder: 'Do you agree with…',
+    optionsLabel: 'Options',
+    optionPlaceholder: (n) => `Option ${n}`,
+    removeOption: 'Remove',
+    addOption: '+ Add option',
+    rewardLabel: 'Reward per answer (TON)',
+    rewardHint: (min) => `Must be more than ${min} TON (the cost of answering).`,
+    paidAnswersLabel: 'Number of paid answers',
+    totalSent: 'You send:',
+    totalBreakdown: (fee, pool) =>
+        `(${fee} contract fee + ${pool} TON reward pool). The question closes by itself when the pool runs out, and the creator can close it at any time to take back the rest.`,
+    createButton: 'Create question',
+    createTxLabel: 'Create question',
+    createNeedsWallet: 'Connect a testnet wallet to create a question.',
+    errQuestionEmpty: 'The question is empty.',
+    errQuestionLong: (max, now) => `The question can be at most ${max} bytes (now ${now}).`,
+    errOptionEmpty: (n) => `Option ${n} is empty.`,
+    errOptionLong: (n, max, now) => `Option ${n} can be at most ${max} bytes (now ${now}).`,
+    errRewardInvalid: 'The reward per answer is not a valid TON amount.',
+    errRewardLow: (min) => `The reward per answer must be more than ${min} TON, the amount an answerer sends.`,
+    errPaidAnswers: 'There must be at least 1 paid answer.',
+
+    listTitle: (n) => `Questionnaires (${n})`,
+    listEmpty: 'No questions yet.',
+    listEmptyCta: 'Create the first one',
+    backToList: '← All questionnaires',
+    notFound: (id) => `Question #${id} was not found in this contract.`,
+
+    open: 'Open',
+    closed: 'Closed',
+    vote: 'Vote',
+    voteLabel: (option) => `Vote for ${option}`,
+    votes: (n, percent) => `${n} ${n === 1 ? 'vote' : 'votes'} · ${percent}%`,
+    answerTxLabel: (id) => `Answer #${id}`,
+    summary: (answers, creator) => `${answers} ${answers === 1 ? 'answer' : 'answers'} · created by ${creator}`,
+    rewardSummary: (reward, pool, left) =>
+        ` · reward ${reward} TON per answer · ${pool} TON left in the pool (${left} more ${left === '1' ? 'answer' : 'answers'})`,
+    rewardBelowCost: (cost) =>
+        `This question's reward is not more than the cost of answering (${cost} TON), so an answerer may get back less than they send.`,
+    alreadyAnswered: 'You already answered this question.',
+    answerCost: (value) => `Answering sends ${value} TON. The contract returns the rest together with the reward.`,
+    closeButton: 'Close question & take back the pool',
+    closeTxLabel: (id) => `Close #${id}`,
+    share: 'Share link',
+    copied: 'Link copied',
+};
+
+export const messages: Record<Lang, Messages> = { id, en };

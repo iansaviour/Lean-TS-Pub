@@ -12,58 +12,74 @@ type Props = {
 
 export default function Home({ state, walletConnected, go }: Props) {
     const { t } = useI18n();
-    const questions = state?.kind === 'ready' ? state.questions : [];
+    const ready = state?.kind === 'ready';
+    const questions = ready ? state.questions : [];
     const open = questions.filter((q) => q.isOpen).length;
     const answers = questions.reduce((sum, q) => sum + q.votes.reduce((a, v) => a + v, 0), 0);
 
+    const stats = [
+        { value: questions.length, label: t.statQuestions },
+        { value: open, label: t.statOpen },
+        { value: answers, label: t.statAnswers },
+    ];
+
+    const steps = [
+        { title: t.stepCreateTitle, text: t.stepCreate(formatTon(CREATE_FEE), formatTon(ANSWER_VALUE)) },
+        { title: t.stepAnswerTitle, text: t.stepAnswer(formatTon(ANSWER_VALUE)) },
+        { title: t.stepCloseTitle, text: t.stepClose },
+    ];
+
     return (
-        <>
-            <section className="card">
-                <h2>{t.welcome}</h2>
-                <p>{t.intro}</p>
-                {!walletConnected && <p className="muted">{t.connectHint}</p>}
+        <div className="home">
+            <section className="home-hero">
+                <p className="home-kicker">{t.heroKicker}</p>
+                <h2 className="home-title">
+                    {t.heroTitle.map((line, i) => (
+                        <span key={line} className={i === t.heroTitle.length - 1 ? 'accent' : ''}>
+                            {line}
+                        </span>
+                    ))}
+                </h2>
+                <div className="home-intro">
+                    <p>{t.intro}</p>
+                    {!walletConnected && <p className="home-hint">{t.connectHint}</p>}
+                </div>
+                <div className="home-actions">
+                    <button type="button" className="home-button solid" onClick={() => go('create')}>
+                        {t.goCreate} <span aria-hidden="true">→</span>
+                    </button>
+                    <button type="button" className="home-button outline" onClick={() => go('list')}>
+                        {t.goList}
+                    </button>
+                </div>
             </section>
 
-            {state?.kind === 'ready' && (
-                <section className="stats">
-                    <div className="stat">
-                        <strong>{questions.length}</strong>
-                        <span>{t.statQuestions}</span>
-                    </div>
-                    <div className="stat">
-                        <strong>{open}</strong>
-                        <span>{t.statOpen}</span>
-                    </div>
-                    <div className="stat">
-                        <strong>{answers}</strong>
-                        <span>{t.statAnswers}</span>
-                    </div>
-                </section>
-            )}
+            <section className="home-section">
+                <h3 className="home-label">{t.statsLabel}</h3>
+                <div className="home-stats">
+                    {stats.map((stat) => (
+                        <div className="home-stat" key={stat.label}>
+                            <strong>{ready ? stat.value : '—'}</strong>
+                            <span>{stat.label}</span>
+                        </div>
+                    ))}
+                </div>
+            </section>
 
-            <section className="card">
-                <h2>{t.howItWorks}</h2>
-                <ol className="steps">
-                    <li>
-                        <strong>{t.stepCreateTitle}</strong> {t.stepCreate(formatTon(CREATE_FEE), formatTon(ANSWER_VALUE))}
-                    </li>
-                    <li>
-                        <strong>{t.stepAnswerTitle}</strong> {t.stepAnswer(formatTon(ANSWER_VALUE))}
-                    </li>
-                    <li>
-                        <strong>{t.stepCloseTitle}</strong> {t.stepClose}
-                    </li>
+            <section className="home-section">
+                <h3 className="home-label">{t.howItWorks}</h3>
+                <ol className="home-steps">
+                    {steps.map((step, i) => (
+                        <li key={step.title}>
+                            <span className="home-step-number">{String(i + 1).padStart(2, '0')}</span>
+                            <div>
+                                <strong>{step.title}</strong>
+                                <p>{step.text}</p>
+                            </div>
+                        </li>
+                    ))}
                 </ol>
             </section>
-
-            <div className="actions">
-                <button type="button" className="primary" onClick={() => go('create')}>
-                    {t.goCreate}
-                </button>
-                <button type="button" className="ghost" onClick={() => go('list')}>
-                    {t.goList}
-                </button>
-            </div>
-        </>
+        </div>
     );
 }

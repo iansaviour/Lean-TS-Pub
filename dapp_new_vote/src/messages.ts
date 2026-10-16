@@ -1,3 +1,5 @@
+import { NETWORK, NETWORK_LABEL, OTHER_NETWORK } from './config';
+
 export type Lang = 'id' | 'en';
 
 const id = {
@@ -8,7 +10,7 @@ const id = {
     navCreate: 'Buat Kuesioner',
     navList: 'Kuesioner',
 
-    wrongNetwork: 'Wallet terhubung ke mainnet. Pindahkan wallet ke testnet lalu hubungkan lagi.',
+    wrongNetwork: `Wallet terhubung ke ${OTHER_NETWORK}. Pindahkan wallet ke ${NETWORK} lalu hubungkan lagi.`,
     readFailed: 'Data kontrak gagal dibaca.',
     reading: 'Membaca kontrak…',
     noAddress: 'Isi CONTRACT_ADDRESS di src/config.ts dengan alamat kontrak yang sudah di-deploy.',
@@ -21,10 +23,12 @@ const id = {
     txSent: (label: string) => `${label}: terkirim. Membaca kontrak lagi…`,
     txFailed: (label: string) => `${label}: dibatalkan atau gagal.`,
 
-    welcome: 'Selamat datang',
+    heroKicker: 'Kuesioner on-chain',
+    heroTitle: ['Tanya.', 'Jawab.', 'Dapat TON.'],
+    statsLabel: 'Dalam angka',
     intro:
-        'Buat pertanyaan dengan 2–5 pilihan, lalu siapa pun dengan wallet TON testnet bisa menjawab dan mendapat hadiah TON. Setiap alamat hanya bisa menjawab sekali, dan setiap pertanyaan punya link sendiri untuk dibagikan.',
-    connectHint: 'Hubungkan wallet testnet dengan tombol di kanan atas untuk mulai.',
+        `Buat pertanyaan dengan 2–5 pilihan, lalu siapa pun dengan wallet ${NETWORK_LABEL} bisa menjawab dan mendapat hadiah TON. Setiap alamat hanya bisa menjawab sekali, dan setiap pertanyaan punya link sendiri untuk dibagikan.`,
+    connectHint: `Hubungkan wallet ${NETWORK} dengan tombol di kanan atas untuk mulai.`,
     statQuestions: 'Pertanyaan',
     statOpen: 'Masih terbuka',
     statAnswers: 'Jawaban',
@@ -54,7 +58,7 @@ const id = {
         `(${fee} biaya kontrak + ${pool} TON pool hadiah). Pertanyaan tertutup otomatis saat pool habis, dan pembuat bisa menutupnya kapan saja untuk mengambil sisa pool.`,
     createButton: 'Buat pertanyaan',
     createTxLabel: 'Buat pertanyaan',
-    createNeedsWallet: 'Hubungkan wallet testnet untuk membuat pertanyaan.',
+    createNeedsWallet: `Hubungkan wallet ${NETWORK} untuk membuat pertanyaan.`,
     errQuestionEmpty: 'Pertanyaan belum diisi.',
     errQuestionLong: (max: number, now: number) => `Pertanyaan maksimal ${max} byte (sekarang ${now}).`,
     errOptionEmpty: (n: number) => `Pilihan ${n} belum diisi.`,
@@ -98,7 +102,7 @@ const en: Messages = {
     navCreate: 'Create',
     navList: 'Questionnaires',
 
-    wrongNetwork: 'Your wallet is on mainnet. Switch the wallet to testnet and connect again.',
+    wrongNetwork: `Your wallet is on ${OTHER_NETWORK}. Switch the wallet to ${NETWORK} and connect again.`,
     readFailed: 'Could not read the contract data.',
     reading: 'Reading the contract…',
     noAddress: 'Set CONTRACT_ADDRESS in src/config.ts to the address of the deployed contract.',
@@ -111,10 +115,12 @@ const en: Messages = {
     txSent: (label) => `${label}: sent. Reading the contract again…`,
     txFailed: (label) => `${label}: cancelled or failed.`,
 
-    welcome: 'Welcome',
+    heroKicker: 'On-chain questionnaires',
+    heroTitle: ['Ask.', 'Answer.', 'Earn TON.'],
+    statsLabel: 'In numbers',
     intro:
-        'Create a question with 2–5 options, and anyone with a TON testnet wallet can answer it and earn a TON reward. Each address can answer once, and every question has its own link to share.',
-    connectHint: 'Connect a testnet wallet with the button at the top right to get started.',
+        `Create a question with 2–5 options, and anyone with a ${NETWORK_LABEL} wallet can answer it and earn a TON reward. Each address can answer once, and every question has its own link to share.`,
+    connectHint: `Connect a ${NETWORK} wallet with the button at the top right to get started.`,
     statQuestions: 'Questions',
     statOpen: 'Still open',
     statAnswers: 'Answers',
@@ -144,7 +150,7 @@ const en: Messages = {
         `(${fee} contract fee + ${pool} TON reward pool). The question closes by itself when the pool runs out, and the creator can close it at any time to take back the rest.`,
     createButton: 'Create question',
     createTxLabel: 'Create question',
-    createNeedsWallet: 'Connect a testnet wallet to create a question.',
+    createNeedsWallet: `Connect a ${NETWORK} wallet to create a question.`,
     errQuestionEmpty: 'The question is empty.',
     errQuestionLong: (max, now) => `The question can be at most ${max} bytes (now ${now}).`,
     errOptionEmpty: (n) => `Option ${n} is empty.`,

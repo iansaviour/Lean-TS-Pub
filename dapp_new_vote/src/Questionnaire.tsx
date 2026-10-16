@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CHAIN, TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { Address } from '@ton/core';
 import type { Cell } from '@ton/core';
-import { CONTRACT_ADDRESS } from './config';
+import { CONTRACT_ADDRESS, EXPLORER, NETWORK_CHAIN, NETWORK_LABEL } from './config';
 import { readContract } from './contract';
 import type { ContractState } from './contract';
 import CreateQuestion from './CreateQuestion';
@@ -70,7 +70,7 @@ export default function Questionnaire() {
         () => (wallet ? Address.parse(wallet.account.address) : null),
         [wallet],
     );
-    const onTestnet = wallet?.account.chain === CHAIN.TESTNET;
+    const onNetwork = wallet?.account.chain === NETWORK_CHAIN;
 
     const refresh = useCallback(async () => {
         if (!CONTRACT_ADDRESS) return;
@@ -89,13 +89,13 @@ export default function Questionnaire() {
     }, [refresh]);
 
     const send: SendMessage = async (body, amount, label) => {
-        if (!walletAddress || !onTestnet) return false;
+        if (!walletAddress || !onNetwork) return false;
         setBusy(true);
         setStatus(t.txWaiting(label));
         try {
             await tonConnectUI.sendTransaction({
                 validUntil: Math.floor(Date.now() / 1000) + 300,
-                network: CHAIN.TESTNET,
+                network: NETWORK_CHAIN,
                 messages: [
                     {
                         address: CONTRACT_ADDRESS,
@@ -118,13 +118,13 @@ export default function Questionnaire() {
         }
     };
 
-    const canAct = Boolean(walletAddress && onTestnet && state?.kind === 'ready') && !busy;
+    const canAct = Boolean(walletAddress && onNetwork && state?.kind === 'ready') && !busy;
 
     return (
         <div className="page">
             <header className="header">
                 <div>
-                    <p className="eyebrow">TON testnet</p>
+                    <p className="eyebrow">{NETWORK_LABEL}</p>
                     <h1>{t.appTitle}</h1>
                 </div>
                 <div className="header-actions">
@@ -133,7 +133,7 @@ export default function Questionnaire() {
                 </div>
             </header>
 
-            {wallet && !onTestnet && <p className="notice error">{t.wrongNetwork}</p>}
+            {wallet && !onNetwork && <p className="notice error">{t.wrongNetwork}</p>}
             {status && <p className="notice">{status}</p>}
 
             <ContractNotice state={state} error={error} />
@@ -181,7 +181,7 @@ export default function Questionnaire() {
             <footer className="footer muted">
                 {CONTRACT_ADDRESS ? (
                     <a
-                        href={`https://testnet.tonscan.org/address/${CONTRACT_ADDRESS}`}
+                        href={`${EXPLORER}/address/${CONTRACT_ADDRESS}`}
                         target="_blank"
                         rel="noreferrer"
                         title={CONTRACT_ADDRESS}

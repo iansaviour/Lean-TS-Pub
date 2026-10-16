@@ -1,6 +1,6 @@
 import { Address, beginCell, Cell, Dictionary } from '@ton/core';
 import type { DictionaryValue, Slice } from '@ton/core';
-import { MAX_OPTIONS, TONCENTER } from './config';
+import { MAX_OPTIONS, NETWORK, TONCENTER } from './config';
 
 const OP_CREATE_QUESTION = 1;
 const OP_ANSWER = 2;
@@ -148,6 +148,6 @@ export function formatTon(value: bigint): string {
 }
 
 export function shortAddress(address: Address): string {
-    const text = address.toString({ testOnly: true, bounceable: false });
+    const text = address.toString({ testOnly: NETWORK === 'testnet', bounceable: false });
     return `${text.slice(0, 6)}…${text.slice(-6)}`;
 }

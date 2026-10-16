@@ -1,7 +1,7 @@
 import { toNano } from '@ton/core';
 
 // Address of the deployed vote_d_app.fc on testnet. Fill this in after deploying.
-export const CONTRACT_ADDRESS = '';
+export const CONTRACT_ADDRESS = 'kQC4T4DOHeGDnF8fps8cb4cnE8oe-FV5c6MKotb7en7g2d5z';
 
 export const TONCENTER = 'https://testnet.toncenter.com/api/v2';
 

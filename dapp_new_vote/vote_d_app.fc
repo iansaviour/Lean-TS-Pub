@@ -1,0 +1,286 @@
+#include "imports/stdlib.fc";
+
+;; -----------------------------------------
+;; iansaviour
+;; -----------------------------------------
+
+int equal_slices (slice a, slice b) asm "SDEQ";
+
+;; -----------------------------------------
+;; 0. CONSTANTS
+;; -----------------------------------------
+
+const int op::create_question = 1;
+const int op::answer = 2;
+const int op::change_owner = 3;
+const int op::close_question = 4;
+
+const int error::not_allowed = 401;
+const int error::not_found = 402;
+const int error::closed = 403;
+const int error::already_answered = 404;
+const int error::bad_choice = 405;
+const int error::bad_question = 406;
+const int error::bad_options = 407;
+const int error::not_enough_ton = 408;
+
+const int create_fee = 50000000;       ;; 0.05 TON kept by the contract for gas and storage
+const int min_answer_value = 20000000; ;; 0.02 TON, the unused part is sent back with the reward
+
+const int max_question_bytes = 100;
+const int max_option_bytes = 20;
+const int min_options = 2;
+const int max_options = 5;
+
+;; -----------------------------------------
+;; 1. STORAGE
+;; -----------------------------------------
+;; owner_address | next_question_id:uint32 | questions:(HashmapE 32 ^Question) | answered:(HashmapE 256 ())
+;;
+;; Question cell:
+;; creator | reward_per_answer:coins | reward_pool:coins | is_open:uint1 | option_count:uint8
+;;   ^question_text  (up to 100 bytes)
+;;   ^options        (option_count:uint8, then per option: len:uint8 + len bytes, up to 20 bytes)
+;;   ^votes          (5 x uint32)
+
+(slice, int, cell, cell) load_data() inline {
+    var ds = get_data().begin_parse();
+    return (
+        ds~load_msg_addr(),
+        ds~load_uint(32),
+        ds~load_dict(),
+        ds~load_dict()
+    );
+}
+
+() save_data(slice owner_address, int next_id, cell questions, cell answered) impure inline {
+    set_data(begin_cell()
+        .store_slice(owner_address)
+        .store_uint(next_id, 32)
+        .store_dict(questions)
+        .store_dict(answered)
+        .end_cell());
+}
+
+(slice, int, int, int, int, cell, cell, cell) unpack_question(cell q) inline {
+    slice s = q.begin_parse();
+    return (
+        s~load_msg_addr(), ;; creator
+        s~load_coins(),    ;; reward_per_answer
+        s~load_coins(),    ;; reward_pool
+        s~load_uint(1),    ;; is_open
+        s~load_uint(8),    ;; option_count
+        s~load_ref(),      ;; question_text
+        s~load_ref(),      ;; options
+        s~load_ref()       ;; votes
+    );
+}
+
+cell pack_question(slice creator, int reward, int pool, int is_open, int option_count, cell text, cell options, cell votes) inline {
+    return begin_cell()
+        .store_slice(creator)
+        .store_coins(reward)
+        .store_coins(pool)
+        .store_uint(is_open, 1)
+        .store_uint(option_count, 8)
+        .store_ref(text)
+        .store_ref(options)
+        .store_ref(votes)
+        .end_cell();
+}
+
+;; -----------------------------------------
+;; 2. HELPERS
+;; -----------------------------------------
+
+() check_question_text(cell text) impure inline {
+    slice s = text.begin_parse();
+    int bits = s.slice_bits();
+    throw_unless(error::bad_question,
+        (bits > 0) & (bits <= max_question_bytes * 8) & (bits % 8 == 0) & (s.slice_refs() == 0));
+}
+
+int check_options(cell options) impure inline {
+    slice s = options.begin_parse();
+    throw_unless(error::bad_options, s.slice_refs() == 0);
+    int count = s~load_uint(8);
+    throw_unless(error::bad_options, (count >= min_options) & (count <= max_options));
+    repeat (count) {
+        int len = s~load_uint(8);
+        throw_unless(error::bad_options, (len > 0) & (len <= max_option_bytes));
+        s~skip_bits(len * 8);
+    }
+    throw_unless(error::bad_options, s.slice_empty?());
+    return count;
+}
+
+cell add_vote(cell votes, int choice) inline {
+    slice s = votes.begin_parse();
+    builder b = begin_cell();
+    int i = 0;
+    repeat (max_options) {
+        int v = s~load_uint(32);
+        if (i == choice) {
+            v += 1;
+        }
+        b = b.store_uint(v, 32);
+        i += 1;
+    }
+    return b.end_cell();
+}
+
+int answer_key(int question_id, slice voter) inline {
+    return cell_hash(begin_cell().store_uint(question_id, 32).store_slice(voter).end_cell());
+}
+
+;; Non-bounceable so a failed delivery can't bounce TON back after the pool was already reduced
+() send_ton(slice to, int amount, int mode) impure inline {
+    send_raw_message(begin_cell()
+        .store_uint(0x10, 6)
+        .store_slice(to)
+        .store_coins(amount)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .end_cell(), mode);
+}
+
+;; -----------------------------------------
+;; 3. MESSAGES
+;; -----------------------------------------
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) {
+        return ();
+    }
+
+    slice sender_address = cs~load_msg_addr();
+    int op = in_msg_body~load_uint(32);
+
+    var (owner_address, next_id, questions, answered) = load_data();
+
+    ;; Op 1: Create a question. msg_value - create_fee becomes the reward pool.
+    ;; Body: reward_per_answer:coins ^question_text ^options
+    if (op == op::create_question) {
+        int reward = in_msg_body~load_coins();
+        cell text = in_msg_body~load_ref();
+        cell options = in_msg_body~load_ref();
+
+        check_question_text(text);
+        int option_count = check_options(options);
+
+        int pool = msg_value - create_fee;
+        throw_unless(error::not_enough_ton, pool >= reward);
+
+        cell votes = begin_cell().store_uint(0, 32 * max_options).end_cell();
+        questions~udict_set_ref(32, next_id,
+            pack_question(sender_address, reward, pool, 1, option_count, text, options, votes));
+
+        save_data(owner_address, next_id + 1, questions, answered);
+        return ();
+    }
+
+    ;; Op 2: Answer a question, one answer per address. Pays reward_per_answer to the sender.
+    ;; Body: question_id:uint32 choice:uint8
+    if (op == op::answer) {
+        int question_id = in_msg_body~load_uint(32);
+        int choice = in_msg_body~load_uint(8);
+
+        throw_unless(error::not_enough_ton, msg_value >= min_answer_value);
+
+        (cell q, int found) = questions.udict_get_ref?(32, question_id);
+        throw_unless(error::not_found, found);
+
+        var (creator, reward, pool, is_open, option_count, text, options, votes) = unpack_question(q);
+        throw_unless(error::closed, is_open);
+        throw_unless(error::bad_choice, choice < option_count);
+
+        int key = answer_key(question_id, sender_address);
+        (_, int done) = answered.udict_get?(256, key);
+        throw_if(error::already_answered, done);
+        answered~udict_set_builder(256, key, begin_cell());
+
+        votes = add_vote(votes, choice);
+        pool -= reward;
+
+        ;; Close automatically once the pool can't pay another answer
+        int leftover = 0;
+        if ((reward > 0) & (pool < reward)) {
+            is_open = 0;
+            leftover = pool;
+            pool = 0;
+        }
+
+        questions~udict_set_ref(32, question_id,
+            pack_question(creator, reward, pool, is_open, option_count, text, options, votes));
+        save_data(owner_address, next_id, questions, answered);
+
+        send_ton(sender_address, reward, 64);
+        if (leftover > 0) {
+            send_ton(creator, leftover, 1);
+        }
+        return ();
+    }
+
+    ;; Op 3: Change contract owner
+    ;; Body: new_owner:MsgAddress
+    if (op == op::change_owner) {
+        throw_unless(error::not_allowed, equal_slices(sender_address, owner_address));
+        slice new_owner = in_msg_body~load_msg_addr();
+        save_data(new_owner, next_id, questions, answered);
+        return ();
+    }
+
+    ;; Op 4: Creator closes their question and gets the remaining pool back
+    ;; Body: question_id:uint32
+    if (op == op::close_question) {
+        int question_id = in_msg_body~load_uint(32);
+
+        (cell q, int found) = questions.udict_get_ref?(32, question_id);
+        throw_unless(error::not_found, found);
+
+        var (creator, reward, pool, is_open, option_count, text, options, votes) = unpack_question(q);
+        throw_unless(error::not_allowed, equal_slices(sender_address, creator));
+        throw_unless(error::closed, is_open);
+
+        questions~udict_set_ref(32, question_id,
+            pack_question(creator, reward, 0, 0, option_count, text, options, votes));
+        save_data(owner_address, next_id, questions, answered);
+
+        send_ton(sender_address, pool, 64);
+        return ();
+    }
+
+    throw(0xffff);
+}
+
+;; -----------------------------------------
+;; 4. GETTERS
+;; -----------------------------------------
+
+int get_question_count() method_id {
+    var (_, next_id, _, _) = load_data();
+    return next_id;
+}
+
+(slice, int, int, int, int, cell, cell, cell) get_question(int question_id) method_id {
+    var (_, _, questions, _) = load_data();
+    (cell q, int found) = questions.udict_get_ref?(32, question_id);
+    throw_unless(error::not_found, found);
+    return unpack_question(q);
+}
+
+int has_answered(int question_id, slice voter) method_id {
+    var (_, _, _, answered) = load_data();
+    (_, int done) = answered.udict_get?(256, answer_key(question_id, voter));
+    return done;
+}
+
+slice get_owner() method_id {
+    var (owner_address, _, _, _) = load_data();
+    return owner_address;
+}

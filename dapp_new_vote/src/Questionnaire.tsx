@@ -6,6 +6,7 @@ import { CONTRACT_ADDRESS } from './config';
 import { readContract } from './contract';
 import type { ContractState } from './contract';
 import CreateQuestion from './CreateQuestion';
+import Home from './Home';
 import QuestionCard from './QuestionCard';
 
 const REFRESH_MS = 15_000;
@@ -13,7 +14,48 @@ const AFTER_SEND_MS = 8_000;
 
 export type SendMessage = (body: Cell, amount: bigint, label: string) => Promise<boolean>;
 
+export type Page = 'home' | 'create' | 'list';
+
+const PAGES: { id: Page; hash: string; label: string; icon: string }[] = [
+    { id: 'home', hash: '#/', label: 'Home', icon: '⌂' },
+    { id: 'create', hash: '#/buat', label: 'Buat Kuesioner', icon: '+' },
+    { id: 'list', hash: '#/kuesioner', label: 'Kuesioner', icon: '☰' },
+];
+
+type Route = { page: Page; questionId: number | null };
+
+const QUESTION_HASH = /^#\/kuesioner\/(\d+)$/;
+
+function routeFromHash(): Route {
+    const match = QUESTION_HASH.exec(window.location.hash);
+    if (match) {
+        return { page: 'list', questionId: Number(match[1]) };
+    }
+    const page = PAGES.find((item) => item.hash === window.location.hash)?.id ?? 'home';
+    return { page, questionId: null };
+}
+
+function useRoute(): [Route, (page: Page) => void] {
+    const [route, setRoute] = useState<Route>(routeFromHash);
+
+    useEffect(() => {
+        const onHashChange = () => {
+            setRoute(routeFromHash());
+            window.scrollTo({ top: 0 });
+        };
+        window.addEventListener('hashchange', onHashChange);
+        return () => window.removeEventListener('hashchange', onHashChange);
+    }, []);
+
+    const go = useCallback((next: Page) => {
+        window.location.hash = PAGES.find((item) => item.id === next)!.hash;
+    }, []);
+
+    return [route, go];
+}
+
 export default function Questionnaire() {
+    const [{ page, questionId }, go] = useRoute();
     const [tonConnectUI] = useTonConnectUI();
     const wallet = useTonWallet();
     const [state, setState] = useState<ContractState | null>(null);
@@ -92,38 +134,108 @@ export default function Questionnaire() {
 
             <ContractNotice state={state} error={error} />
 
-            {state?.kind === 'ready' && (
-                <>
-                    <CreateQuestion canAct={canAct} send={send} />
+            {page === 'home' && <Home state={state} walletConnected={Boolean(wallet)} go={go} />}
 
-                    <section>
-                        <h2>Pertanyaan ({state.questions.length})</h2>
-                        {state.questions.length === 0 && <p className="muted">Belum ada pertanyaan.</p>}
-                        {state.questions.map((question) => (
-                            <QuestionCard
-                                key={question.id}
-                                question={question}
-                                answered={state.answered}
-                                walletAddress={walletAddress}
-                                canAct={canAct}
-                                send={send}
-                            />
-                        ))}
-                    </section>
-                </>
+            {page === 'create' && state?.kind === 'ready' && (
+                <CreateQuestion canAct={canAct} send={send} onCreated={() => go('list')} />
+            )}
+
+            {page === 'list' && questionId !== null && state?.kind === 'ready' && (
+                <QuestionDetail
+                    questionId={questionId}
+                    state={state}
+                    walletAddress={walletAddress}
+                    canAct={canAct}
+                    send={send}
+                />
+            )}
+
+            {page === 'list' && questionId === null && state?.kind === 'ready' && (
+                <section>
+                    <h2>Kuesioner ({state.questions.length})</h2>
+                    {state.questions.length === 0 && (
+                        <p className="muted">
+                            Belum ada pertanyaan.{' '}
+                            <button type="button" className="link" onClick={() => go('create')}>
+                                Buat yang pertama
+                            </button>
+                        </p>
+                    )}
+                    {state.questions.map((question) => (
+                        <QuestionCard
+                            key={question.id}
+                            question={question}
+                            answered={state.answered}
+                            walletAddress={walletAddress}
+                            canAct={canAct}
+                            send={send}
+                        />
+                    ))}
+                </section>
             )}
 
             <footer className="footer muted">
-                Kontrak:{' '}
                 {CONTRACT_ADDRESS ? (
-                    <a href={`https://testnet.tonscan.org/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noreferrer">
-                        {CONTRACT_ADDRESS}
+                    <a
+                        href={`https://testnet.tonscan.org/address/${CONTRACT_ADDRESS}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={CONTRACT_ADDRESS}
+                    >
+                        Contract Address
                     </a>
                 ) : (
-                    'belum diisi'
+                    'Contract Address belum diisi'
                 )}
             </footer>
+
+            <nav className="bottom-nav">
+                {PAGES.map((item) => (
+                    <button
+                        key={item.id}
+                        type="button"
+                        className={page === item.id ? 'active' : ''}
+                        aria-current={page === item.id ? 'page' : undefined}
+                        onClick={() => go(item.id)}
+                    >
+                        <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                        <span>{item.label}</span>
+                    </button>
+                ))}
+            </nav>
         </div>
+    );
+}
+
+type DetailProps = {
+    questionId: number;
+    state: Extract<ContractState, { kind: 'ready' }>;
+    walletAddress: Address | null;
+    canAct: boolean;
+    send: SendMessage;
+};
+
+function QuestionDetail({ questionId, state, walletAddress, canAct, send }: DetailProps) {
+    const question = state.questions.find((q) => q.id === questionId);
+
+    return (
+        <section>
+            <a className="back-link" href={PAGES.find((item) => item.id === 'list')!.hash}>
+                ← Semua kuesioner
+            </a>
+            {question ? (
+                <QuestionCard
+                    question={question}
+                    answered={state.answered}
+                    walletAddress={walletAddress}
+                    canAct={canAct}
+                    send={send}
+                    detail
+                />
+            ) : (
+                <p className="notice error">Pertanyaan #{questionId} tidak ditemukan di kontrak ini.</p>
+            )}
+        </section>
     );
 }
 

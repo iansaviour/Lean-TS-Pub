@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toNano } from '@ton/core';
 import {
+    ANSWER_VALUE,
     CREATE_FEE,
     MAX_OPTION_BYTES,
     MAX_OPTIONS,
@@ -13,6 +14,7 @@ import type { SendMessage } from './Questionnaire';
 type Props = {
     canAct: boolean;
     send: SendMessage;
+    onCreated: () => void;
 };
 
 function parseTon(value: string): bigint | null {
@@ -24,16 +26,15 @@ function parseTon(value: string): bigint | null {
     }
 }
 
-export default function CreateQuestion({ canAct, send }: Props) {
+export default function CreateQuestion({ canAct, send, onCreated }: Props) {
     const [text, setText] = useState('');
     const [options, setOptions] = useState(['', '']);
-    const [reward, setReward] = useState('0');
+    const [reward, setReward] = useState('0.04');
     const [paidAnswers, setPaidAnswers] = useState('10');
 
     const rewardNano = parseTon(reward);
     const answerCount = /^\d+$/.test(paidAnswers.trim()) ? BigInt(paidAnswers.trim()) : null;
-    const pool =
-        rewardNano === 0n ? 0n : rewardNano !== null && answerCount !== null ? rewardNano * answerCount : null;
+    const pool = rewardNano !== null && answerCount !== null ? rewardNano * answerCount : null;
     const total = pool !== null ? CREATE_FEE + pool : null;
 
     const textBytes = byteLength(text.trim());
@@ -45,8 +46,14 @@ export default function CreateQuestion({ canAct, send }: Props) {
         if (bytes === 0) problems.push(`Pilihan ${i + 1} belum diisi.`);
         if (bytes > MAX_OPTION_BYTES) problems.push(`Pilihan ${i + 1} maksimal ${MAX_OPTION_BYTES} byte (sekarang ${bytes}).`);
     });
-    if (rewardNano === null) problems.push('Hadiah per jawaban bukan angka TON yang valid.');
-    if (rewardNano !== null && rewardNano > 0n && (answerCount === null || answerCount === 0n)) {
+    if (rewardNano === null) {
+        problems.push('Hadiah per jawaban bukan angka TON yang valid.');
+    } else if (rewardNano <= ANSWER_VALUE) {
+        problems.push(
+            `Hadiah per jawaban harus lebih dari ${formatTon(ANSWER_VALUE)} TON, yaitu jumlah yang dikirim penjawab.`,
+        );
+    }
+    if (answerCount === null || answerCount === 0n) {
         problems.push('Jumlah jawaban berhadiah minimal 1.');
     }
 
@@ -61,12 +68,13 @@ export default function CreateQuestion({ canAct, send }: Props) {
         if (sent) {
             setText('');
             setOptions(['', '']);
+            onCreated();
         }
     };
 
     return (
         <section className="card">
-            <h2>Buat pertanyaan</h2>
+            <h2>Buat kuesioner</h2>
 
             <label className="field">
                 <span>Pertanyaan <small className="muted">{textBytes}/{MAX_QUESTION_BYTES} byte</small></span>
@@ -106,23 +114,19 @@ export default function CreateQuestion({ canAct, send }: Props) {
                 <label className="field">
                     <span>Hadiah per jawaban (TON)</span>
                     <input value={reward} onChange={(e) => setReward(e.target.value)} inputMode="decimal" />
+                    <small className="muted">Harus lebih dari {formatTon(ANSWER_VALUE)} TON (biaya menjawab).</small>
                 </label>
                 <label className="field">
                     <span>Jumlah jawaban berhadiah</span>
-                    <input
-                        value={paidAnswers}
-                        onChange={(e) => setPaidAnswers(e.target.value)}
-                        inputMode="numeric"
-                        disabled={rewardNano === 0n}
-                    />
+                    <input value={paidAnswers} onChange={(e) => setPaidAnswers(e.target.value)} inputMode="numeric" />
                 </label>
             </div>
 
-            {total !== null && (
+            {total !== null && pool !== null && (
                 <p className="muted">
-                    Dikirim: <strong>{formatTon(total)} TON</strong> ({formatTon(CREATE_FEE)} biaya kontrak
-                    {pool !== null && pool > 0n ? ` + ${formatTon(pool)} TON pool hadiah` : ''}). Pertanyaan tertutup
-                    otomatis saat pool habis, dan pembuat bisa menutupnya kapan saja untuk mengambil sisa pool.
+                    Dikirim: <strong>{formatTon(total)} TON</strong> ({formatTon(CREATE_FEE)} biaya kontrak +{' '}
+                    {formatTon(pool)} TON pool hadiah). Pertanyaan tertutup otomatis saat pool habis, dan pembuat bisa
+                    menutupnya kapan saja untuk mengambil sisa pool.
                 </p>
             )}
 

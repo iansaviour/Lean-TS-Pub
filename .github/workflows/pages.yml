@@ -27,6 +27,7 @@ jobs:
             dapp/package-lock.json
             dapp_vote/package-lock.json
             dapp_new_vote/package-lock.json
+            dapp_set_vote/package-lock.json
       - run: npm ci
         working-directory: dapp
       - run: npm run build
@@ -39,12 +40,17 @@ jobs:
         working-directory: dapp_new_vote
       - run: npm run build
         working-directory: dapp_new_vote
+      - run: npm ci
+        working-directory: dapp_set_vote
+      - run: npm run build
+        working-directory: dapp_set_vote
       - name: Assemble site
         run: |
-          mkdir -p site/vote site/new-vote
+          mkdir -p site/vote site/new-vote site/set-vote
           cp -a dapp/dist/. site/
           cp -a dapp_vote/dist/. site/vote/
           cp -a dapp_new_vote/dist/. site/new-vote/
+          cp -a dapp_set_vote/dist/. site/set-vote/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

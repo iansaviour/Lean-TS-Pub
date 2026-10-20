@@ -167,7 +167,7 @@ export default function CreateQuestion({ canAct, send, onCreated }: Props) {
                         ))}
                         <button
                             type="button"
-                            className="ghost"
+                            className="primary full-width"
                             disabled={draft.options.length >= MAX_OPTIONS}
                             onClick={() =>
                                 updateDraft(qi, { ...draft, options: [...draft.options, ''] })
@@ -181,7 +181,7 @@ export default function CreateQuestion({ canAct, send, onCreated }: Props) {
 
             <button
                 type="button"
-                className="ghost"
+                className="primary full-width"
                 disabled={drafts.length >= MAX_QUESTIONS}
                 onClick={() => setDrafts([...drafts, emptyDraft()])}
             >

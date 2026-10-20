@@ -25,11 +25,11 @@ const id = {
 
     heroKicker: 'Set kuesioner on-chain',
     heroTitle: ['Tanya.', 'Jawab.', 'Dapat TON.'],
-    statsLabel: 'Dalam angka',
+    statsLabel: 'Statistik',
     intro:
-        `Buat set berisi 1–5 pertanyaan (masing-masing 2–5 pilihan). Siapa pun dengan wallet ${NETWORK_LABEL} menjawab seluruh set dalam satu transaksi dan mendapat hadiah TON. Setiap alamat hanya bisa menyelesaikan set sekali.`,
+        'Buat kuisioner maksimal 5 pertanyaan dengan maksimal 2–5 pilihan jawaban. Akses dengan wallet TON menjawab seluruh pertanyaan untuk mendapatkan hadiah TON. Satu alamat wallet hanya bisa menjawab kuisioner sekali.',
     connectHint: `Hubungkan wallet ${NETWORK} dengan tombol di kanan atas untuk mulai.`,
-    statSets: 'Set',
+    statSets: 'Kuisioner',
     statOpen: 'Masih terbuka',
     statAnswers: 'Penyelesaian',
     howItWorks: 'Cara kerja',
@@ -131,11 +131,11 @@ const en: Messages = {
 
     heroKicker: 'On-chain questionnaire sets',
     heroTitle: ['Ask.', 'Answer.', 'Earn TON.'],
-    statsLabel: 'In numbers',
+    statsLabel: 'Statistics',
     intro:
-        `Create a set of 1–5 questions (each with 2–5 options). Anyone with a ${NETWORK_LABEL} wallet answers the whole set in one transaction and earns a TON reward. Each address can complete a set once.`,
+        'Create a questionnaire with up to 5 questions and 2–5 answer options each. Connect a TON wallet, answer every question, and earn a TON reward. Each wallet address can answer a questionnaire only once.',
     connectHint: `Connect a ${NETWORK} wallet with the button at the top right to get started.`,
-    statSets: 'Sets',
+    statSets: 'Questionnaires',
     statOpen: 'Still open',
     statAnswers: 'Completions',
     howItWorks: 'How it works',

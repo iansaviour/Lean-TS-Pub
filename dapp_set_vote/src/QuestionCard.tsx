@@ -109,9 +109,19 @@ export default function QuestionCard({
                                                     className={selected ? 'vote selected' : 'vote'}
                                                     aria-pressed={selected}
                                                     aria-label={option}
+                                                    title={t.pickOption}
                                                     onClick={() => pick(qi, oi)}
                                                 >
-                                                    {selected ? '✓' : t.pickOption}
+                                                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                                                        <path
+                                                            d="M5 12l5 5L20 7"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="2.6"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                        />
+                                                    </svg>
                                                 </button>
                                             )}
                                             <div className="result-body">
@@ -152,15 +162,18 @@ export default function QuestionCard({
                 </p>
             )}
 
-            <p className="muted">
-                {t.summary(completions, set.questions.length, shortAddress(set.creator))}
-                {set.rewardPerCompletion > 0n &&
-                    t.rewardSummary(
-                        formatTon(set.rewardPerCompletion),
-                        formatTon(set.rewardPool),
-                        paidLeft?.toString() ?? '0',
-                    )}
-            </p>
+            <div className="muted set-summary">
+                <div>{t.summary(completions, set.questions.length)}</div>
+                <div>{t.createdBy(shortAddress(set.creator))}</div>
+                {set.rewardPerCompletion > 0n && (
+                    <>
+                        <div>{t.rewardPer(formatTon(set.rewardPerCompletion))}</div>
+                        <div>
+                            {t.poolLeft(formatTon(set.rewardPool), paidLeft?.toString() ?? '0')}
+                        </div>
+                    </>
+                )}
+            </div>
 
             {set.isOpen && rewardBelowCost && (
                 <p className="notice error">{t.rewardBelowCost(formatTon(ANSWER_VALUE))}</p>

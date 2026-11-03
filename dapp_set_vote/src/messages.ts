@@ -1,4 +1,4 @@
-import { NETWORK, NETWORK_LABEL, OTHER_NETWORK } from './config';
+import { NETWORK, OTHER_NETWORK } from './config';
 
 export type Lang = 'id' | 'en';
 
@@ -31,11 +31,11 @@ const id = {
     connectHint: `Hubungkan wallet ${NETWORK} dengan tombol di kanan atas untuk mulai.`,
     statSets: 'Kuisioner',
     statOpen: 'Masih terbuka',
-    statAnswers: 'Penyelesaian',
+    statAnswers: 'Partisipan',
     howItWorks: 'Cara kerja',
     stepCreateTitle: 'Buat set kuesioner.',
     stepCreate: (fee: string, minReward: string) =>
-        `Biaya ${fee} TON, ditambah pool hadiah. Hadiah per penyelesaian harus lebih dari ${minReward} TON, supaya penjawab selalu untung.`,
+        `Biaya ${fee} TON, ditambah pool hadiah. Hadiah per partisipan harus lebih dari ${minReward} TON, supaya penjawab selalu untung.`,
     stepAnswerTitle: 'Jawab seluruh set.',
     stepAnswer: (value: string) =>
         `Pilih jawaban untuk setiap pertanyaan, lalu kirim ${value} TON sekali. Sisanya dikembalikan bersama hadiah.`,
@@ -54,9 +54,9 @@ const id = {
     addOption: '+ Tambah pilihan',
     removeQuestion: 'Hapus pertanyaan',
     addQuestion: '+ Tambah pertanyaan',
-    rewardLabel: 'Hadiah per penyelesaian (TON)',
+    rewardLabel: 'Hadiah per partisipan (TON)',
     rewardHint: (min: string) => `Harus lebih dari ${min} TON (biaya menjawab set).`,
-    paidAnswersLabel: 'Jumlah penyelesaian berhadiah',
+    paidAnswersLabel: 'Jumlah partisipan berhadiah',
     totalSent: 'Dikirim:',
     totalBreakdown: (fee: string, pool: string) =>
         `(${fee} biaya kontrak + ${pool} TON pool hadiah). Set tertutup otomatis saat pool habis, dan pembuat bisa menutupnya kapan saja untuk mengambil sisa pool.`,
@@ -71,10 +71,10 @@ const id = {
     errOptionEmpty: (q: number, o: number) => `Pertanyaan ${q}, pilihan ${o} belum diisi.`,
     errOptionLong: (q: number, o: number, max: number, now: number) =>
         `Pertanyaan ${q}, pilihan ${o} maksimal ${max} byte (sekarang ${now}).`,
-    errRewardInvalid: 'Hadiah per penyelesaian bukan angka TON yang valid.',
+    errRewardInvalid: 'Hadiah per partisipan bukan angka TON yang valid.',
     errRewardLow: (min: string) =>
-        `Hadiah per penyelesaian harus lebih dari ${min} TON, yaitu jumlah yang dikirim penjawab.`,
-    errPaidAnswers: 'Jumlah penyelesaian berhadiah minimal 1.',
+        `Hadiah per partisipan harus lebih dari ${min} TON, yaitu jumlah yang dikirim penjawab.`,
+    errPaidAnswers: 'Jumlah partisipan berhadiah minimal 1.',
 
     listTitle: (n: number) => `Kuesioner (${n})`,
     listEmpty: 'Belum ada set.',
@@ -90,15 +90,15 @@ const id = {
     errIncomplete: 'Pilih jawaban untuk setiap pertanyaan.',
     votes: (n: number, percent: number) => `${n} suara · ${percent}%`,
     answerTxLabel: (id: number) => `Jawab set #${id}`,
-    summary: (answers: number, questions: number, creator: string) =>
-        `${answers} penyelesaian · ${questions} pertanyaan · dibuat oleh ${creator}`,
-    rewardSummary: (reward: string, pool: string, left: string) =>
-        ` · hadiah ${reward} TON per penyelesaian · sisa pool ${pool} TON (${left} penyelesaian lagi)`,
+    summary: (answers: number, questions: number) => `${answers} partisipan · ${questions} pertanyaan`,
+    createdBy: (creator: string) => `Dibuat oleh ${creator}`,
+    rewardPer: (reward: string) => `Hadiah ${reward} TON per partisipan`,
+    poolLeft: (pool: string, left: string) => `Sisa pool ${pool} TON (${left} partisipan lagi)`,
     rewardBelowCost: (cost: string) =>
         `Hadiah set ini tidak lebih dari biaya menjawab (${cost} TON), jadi penjawab bisa menerima kembali lebih sedikit dari yang dikirim.`,
     alreadyAnswered: 'Kamu sudah menyelesaikan set ini.',
     answerCost: (value: string) =>
-        `Menjawab set mengirim ${value} TON sekali. Kontrak mengembalikan sisanya bersama hadiah.`,
+        `Membutuhkan biaya ${value} TON untuk menjawab. Sisa hadiah TON dikirimkan setelah dikurangi biaya.`,
     closeButton: 'Tutup set & ambil sisa pool',
     closeTxLabel: (id: number) => `Tutup set #${id}`,
     share: 'Bagikan link',
@@ -137,11 +137,11 @@ const en: Messages = {
     connectHint: `Connect a ${NETWORK} wallet with the button at the top right to get started.`,
     statSets: 'Questionnaires',
     statOpen: 'Still open',
-    statAnswers: 'Completions',
+    statAnswers: 'Participants',
     howItWorks: 'How it works',
     stepCreateTitle: 'Create a questionnaire set.',
     stepCreate: (fee, minReward) =>
-        `It costs ${fee} TON plus a reward pool. The reward per completion must be more than ${minReward} TON, so answering always pays off.`,
+        `It costs ${fee} TON plus a reward pool. The reward per participant must be more than ${minReward} TON, so answering always pays off.`,
     stepAnswerTitle: 'Answer the whole set.',
     stepAnswer: (value) =>
         `Pick an option for every question, then send ${value} TON once. The rest comes back together with the reward.`,
@@ -161,9 +161,9 @@ const en: Messages = {
     addOption: '+ Add option',
     removeQuestion: 'Remove question',
     addQuestion: '+ Add question',
-    rewardLabel: 'Reward per completion (TON)',
+    rewardLabel: 'Reward per participant (TON)',
     rewardHint: (min) => `Must be more than ${min} TON (the cost of answering the set).`,
-    paidAnswersLabel: 'Number of paid completions',
+    paidAnswersLabel: 'Number of paid participants',
     totalSent: 'You send:',
     totalBreakdown: (fee, pool) =>
         `(${fee} contract fee + ${pool} TON reward pool). The set closes by itself when the pool runs out, and the creator can close it at any time to take back the rest.`,
@@ -176,10 +176,10 @@ const en: Messages = {
     errQuestionLong: (n, max, now) => `Question ${n} can be at most ${max} bytes (now ${now}).`,
     errOptionEmpty: (q, o) => `Question ${q}, option ${o} is empty.`,
     errOptionLong: (q, o, max, now) => `Question ${q}, option ${o} can be at most ${max} bytes (now ${now}).`,
-    errRewardInvalid: 'The reward per completion is not a valid TON amount.',
+    errRewardInvalid: 'The reward per participant is not a valid TON amount.',
     errRewardLow: (min) =>
-        `The reward per completion must be more than ${min} TON, the amount an answerer sends.`,
-    errPaidAnswers: 'There must be at least 1 paid completion.',
+        `The reward per participant must be more than ${min} TON, the amount an answerer sends.`,
+    errPaidAnswers: 'There must be at least 1 paid participant.',
 
     listTitle: (n) => `Questionnaires (${n})`,
     listEmpty: 'No sets yet.',
@@ -195,15 +195,17 @@ const en: Messages = {
     errIncomplete: 'Choose an answer for every question.',
     votes: (n, percent) => `${n} ${n === 1 ? 'vote' : 'votes'} · ${percent}%`,
     answerTxLabel: (id) => `Answer set #${id}`,
-    summary: (answers, questions, creator) =>
-        `${answers} ${answers === 1 ? 'completion' : 'completions'} · ${questions} ${questions === 1 ? 'question' : 'questions'} · created by ${creator}`,
-    rewardSummary: (reward, pool, left) =>
-        ` · reward ${reward} TON per completion · ${pool} TON left in the pool (${left} more ${left === '1' ? 'completion' : 'completions'})`,
+    summary: (answers, questions) =>
+        `${answers} ${answers === 1 ? 'participant' : 'participants'} · ${questions} ${questions === 1 ? 'question' : 'questions'}`,
+    createdBy: (creator) => `Created by ${creator}`,
+    rewardPer: (reward) => `Reward ${reward} TON per participant`,
+    poolLeft: (pool, left) =>
+        `${pool} TON left in the pool (${left} more ${left === '1' ? 'participant' : 'participants'})`,
     rewardBelowCost: (cost) =>
         `This set's reward is not more than the cost of answering (${cost} TON), so an answerer may get back less than they send.`,
     alreadyAnswered: 'You already completed this set.',
     answerCost: (value) =>
-        `Answering the set sends ${value} TON once. The contract returns the rest together with the reward.`,
+        `Answering costs ${value} TON. The remaining TON reward is sent after the cost is deducted.`,
     closeButton: 'Close set & take back the pool',
     closeTxLabel: (id) => `Close set #${id}`,
     share: 'Share link',

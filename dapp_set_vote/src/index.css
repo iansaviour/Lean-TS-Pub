@@ -433,13 +433,33 @@ button.danger {
 
 button.vote {
   flex-shrink: 0;
-  background: var(--accent);
-  color: #fff;
-  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: transparent;
+  color: var(--border);
+  border: 2px solid var(--border);
+}
+
+button.vote:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 button.vote.selected {
   background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.set-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 12px 0;
 }
 
 .set-draft {

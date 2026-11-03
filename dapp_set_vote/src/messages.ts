@@ -1,4 +1,4 @@
-import { NETWORK, NETWORK_LABEL, OTHER_NETWORK } from './config';
+import { NETWORK, OTHER_NETWORK } from './config';
 
 export type Lang = 'id' | 'en';
 
@@ -13,11 +13,11 @@ const id = {
     wrongNetwork: `Wallet terhubung ke ${OTHER_NETWORK}. Pindahkan wallet ke ${NETWORK} lalu hubungkan lagi.`,
     readFailed: 'Data kontrak gagal dibaca.',
     reading: 'Membaca kontrak…',
-    noAddress: 'Isi CONTRACT_ADDRESS di src/config.ts dengan alamat kontrak set yang sudah di-deploy.',
-    missing: 'Belum ada kontrak aktif di alamat ini.',
-    emptyData: 'Data awal kontrak kosong. Deploy ulang dengan data: alamat owner, uint32 0, lalu dua dictionary kosong.',
-    contractAddress: 'Contract Address',
-    contractAddressMissing: 'Contract Address belum diisi',
+    missing: `Kontrak master belum di-deploy di ${NETWORK}. Siapa pun bisa men-deploy-nya sekali; alamatnya selalu sama karena dihitung dari kodenya.`,
+    deployButton: (value: string) => `Deploy kontrak master (${value} TON)`,
+    deployTxLabel: 'Deploy master',
+    deployNeedsWallet: `Hubungkan wallet ${NETWORK} untuk men-deploy kontrak master.`,
+    contractAddress: 'Master Contract Address',
 
     txWaiting: (label: string) => `${label}: menunggu konfirmasi di wallet…`,
     txSent: (label: string) => `${label}: terkirim. Membaca kontrak lagi…`,
@@ -37,8 +37,8 @@ const id = {
     stepCreate: (fee: string, minReward: string) =>
         `Biaya ${fee} TON, ditambah pool hadiah. Hadiah per penyelesaian harus lebih dari ${minReward} TON, supaya penjawab selalu untung.`,
     stepAnswerTitle: 'Jawab seluruh set.',
-    stepAnswer: (value: string) =>
-        `Pilih jawaban untuk setiap pertanyaan, lalu kirim ${value} TON sekali. Sisanya dikembalikan bersama hadiah.`,
+    stepAnswer: (value: string, receipt: string) =>
+        `Pilih jawaban untuk setiap pertanyaan, lalu kirim ${value} TON sekali. ${receipt} TON disimpan sebagai bukti kamu sudah menjawab, sisanya dikembalikan bersama hadiah.`,
     stepCloseTitle: 'Tutup kapan saja.',
     stepClose: 'Pembuat bisa menutup setnya dan mengambil sisa pool. Set juga tertutup sendiri saat pool habis.',
     goCreate: 'Buat kuesioner',
@@ -80,7 +80,7 @@ const id = {
     listEmpty: 'Belum ada set.',
     listEmptyCta: 'Buat yang pertama',
     backToList: '← Semua kuesioner',
-    notFound: (id: number) => `Set #${id} tidak ditemukan di kontrak ini.`,
+    notFound: (id: number) => `Set #${id} tidak ditemukan.`,
     setPreview: (n: number) => `${n} pertanyaan`,
 
     open: 'Terbuka',
@@ -97,8 +97,9 @@ const id = {
     rewardBelowCost: (cost: string) =>
         `Hadiah set ini tidak lebih dari biaya menjawab (${cost} TON), jadi penjawab bisa menerima kembali lebih sedikit dari yang dikirim.`,
     alreadyAnswered: 'Kamu sudah menyelesaikan set ini.',
-    answerCost: (value: string) =>
-        `Menjawab set mengirim ${value} TON sekali. Kontrak mengembalikan sisanya bersama hadiah.`,
+    busy: 'Semua sisa hadiah sedang dipesan oleh jawaban yang belum selesai diproses. Coba lagi beberapa detik lagi.',
+    answerCost: (value: string, receipt: string) =>
+        `Menjawab set mengirim ${value} TON sekali. ${receipt} TON tetap disimpan di kontrak bukti jawabanmu, sisanya kembali bersama hadiah. Hasil muncul beberapa detik setelah transaksi, karena jawaban melewati tiga kontrak.`,
     closeButton: 'Tutup set & ambil sisa pool',
     closeTxLabel: (id: number) => `Tutup set #${id}`,
     share: 'Bagikan link',
@@ -118,12 +119,11 @@ const en: Messages = {
     wrongNetwork: `Your wallet is on ${OTHER_NETWORK}. Switch the wallet to ${NETWORK} and connect again.`,
     readFailed: 'Could not read the contract data.',
     reading: 'Reading the contract…',
-    noAddress: 'Set CONTRACT_ADDRESS in src/config.ts to the address of the deployed set contract.',
-    missing: 'There is no active contract at this address.',
-    emptyData:
-        'The contract was deployed with empty data. Redeploy it with: owner address, uint32 0, then two empty dictionaries.',
-    contractAddress: 'Contract Address',
-    contractAddressMissing: 'Contract Address is not set',
+    missing: `The master contract is not deployed on ${NETWORK} yet. Anyone can deploy it once; its address is always the same because it is computed from the code.`,
+    deployButton: (value) => `Deploy the master contract (${value} TON)`,
+    deployTxLabel: 'Deploy master',
+    deployNeedsWallet: `Connect a ${NETWORK} wallet to deploy the master contract.`,
+    contractAddress: 'Master Contract Address',
 
     txWaiting: (label) => `${label}: waiting for wallet confirmation…`,
     txSent: (label) => `${label}: sent. Reading the contract again…`,
@@ -143,8 +143,8 @@ const en: Messages = {
     stepCreate: (fee, minReward) =>
         `It costs ${fee} TON plus a reward pool. The reward per completion must be more than ${minReward} TON, so answering always pays off.`,
     stepAnswerTitle: 'Answer the whole set.',
-    stepAnswer: (value) =>
-        `Pick an option for every question, then send ${value} TON once. The rest comes back together with the reward.`,
+    stepAnswer: (value, receipt) =>
+        `Pick an option for every question, then send ${value} TON once. ${receipt} TON is kept as proof that you answered; the rest comes back together with the reward.`,
     stepCloseTitle: 'Close at any time.',
     stepClose:
         'The creator can close their set and take back the remaining pool. A set also closes by itself when the pool runs out.',
@@ -185,7 +185,7 @@ const en: Messages = {
     listEmpty: 'No sets yet.',
     listEmptyCta: 'Create the first one',
     backToList: '← All questionnaires',
-    notFound: (id) => `Set #${id} was not found in this contract.`,
+    notFound: (id) => `Set #${id} was not found.`,
     setPreview: (n) => `${n} ${n === 1 ? 'question' : 'questions'}`,
 
     open: 'Open',
@@ -202,8 +202,9 @@ const en: Messages = {
     rewardBelowCost: (cost) =>
         `This set's reward is not more than the cost of answering (${cost} TON), so an answerer may get back less than they send.`,
     alreadyAnswered: 'You already completed this set.',
-    answerCost: (value) =>
-        `Answering the set sends ${value} TON once. The contract returns the rest together with the reward.`,
+    busy: 'Every remaining reward is reserved by answers that are still being processed. Try again in a few seconds.',
+    answerCost: (value, receipt) =>
+        `Answering the set sends ${value} TON once. ${receipt} TON stays on the contract that proves you answered; the rest comes back with the reward. Results show up a few seconds after the transaction, because the answer passes through three contracts.`,
     closeButton: 'Close set & take back the pool',
     closeTxLabel: (id) => `Close set #${id}`,
     share: 'Share link',

@@ -1,0 +1,157 @@
+#include "imports/stdlib.fc";
+#include "common.fc";
+
+;; -----------------------------------------
+;; iansaviour
+;; Master: hands out set ids and deploys one set contract per questionnaire.
+;; It keeps no sets and no TON, so its storage never grows.
+;; -----------------------------------------
+
+;; -----------------------------------------
+;; 1. STORAGE
+;; -----------------------------------------
+;; next_set_id:uint32 | ^set_code | ^receipt_code
+;;
+;; Create body (same as the single-contract version):
+;;   reward:coins  question_count:uint8  ^drafts
+;;   drafts = HashmapE 8 ^Draft, keys 0 .. question_count-1
+;;   Draft = ^text ^options
+
+(int, cell, cell) load_data() inline {
+    slice ds = get_data().begin_parse();
+    return (
+        ds~load_uint(32),
+        ds~load_ref(),
+        ds~load_ref()
+    );
+}
+
+() save_data(int next_id, cell set_code, cell receipt_code) impure inline {
+    set_data(begin_cell()
+        .store_uint(next_id, 32)
+        .store_ref(set_code)
+        .store_ref(receipt_code)
+        .end_cell());
+}
+
+cell set_state_init(int set_id, cell set_code, cell receipt_code) inline {
+    return pack_state_init(set_code, set_init_data(my_address(), set_id, receipt_code));
+}
+
+;; -----------------------------------------
+;; 2. HELPERS
+;; -----------------------------------------
+
+() check_question_text(cell text) impure inline {
+    slice s = text.begin_parse();
+    int bits = s.slice_bits();
+    throw_unless(error::bad_question,
+        (bits > 0) & (bits <= max_question_bytes * 8) & (bits % 8 == 0) & (s.slice_refs() == 0));
+}
+
+int check_options(cell options) impure inline {
+    slice s = options.begin_parse();
+    throw_unless(error::bad_options, s.slice_refs() == 0);
+    int count = s~load_uint(8);
+    throw_unless(error::bad_options, (count >= min_options) & (count <= max_options));
+    repeat (count) {
+        int len = s~load_uint(8);
+        throw_unless(error::bad_options, (len > 0) & (len <= max_option_bytes));
+        s~skip_bits(len * 8);
+    }
+    throw_unless(error::bad_options, s.slice_empty?());
+    return count;
+}
+
+cell empty_votes() inline {
+    return begin_cell().store_uint(0, 32 * max_options).end_cell();
+}
+
+;; Validate here, before any TON leaves the master, so a bad set never gets deployed.
+cell build_questions(int question_count, cell drafts) impure inline {
+    throw_unless(error::bad_set, (question_count >= min_questions) & (question_count <= max_questions));
+
+    cell questions = new_dict();
+    int i = 0;
+    repeat (question_count) {
+        (cell draft, int found) = drafts.udict_get_ref?(8, i);
+        throw_unless(error::bad_set, found);
+
+        slice ds = draft.begin_parse();
+        cell text = ds~load_ref();
+        cell options = ds~load_ref();
+
+        check_question_text(text);
+        int option_count = check_options(options);
+
+        questions~udict_set_ref(8, i, pack_question(option_count, text, options, empty_votes()));
+        i += 1;
+    }
+    return questions;
+}
+
+;; -----------------------------------------
+;; 3. MESSAGES
+;; -----------------------------------------
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) {
+        return ();
+    }
+
+    slice sender_address = cs~load_msg_addr();
+    int op = in_msg_body~load_uint(32);
+
+    ;; Op 1: Create a set. msg_value - create_fee becomes the set's reward pool.
+    ;; Body: reward_per_completion:coins question_count:uint8 ^drafts
+    if (op == op::create_set) {
+        int reward = in_msg_body~load_coins();
+        int question_count = in_msg_body~load_uint(8);
+        cell drafts = in_msg_body~load_ref();
+
+        cell questions = build_questions(question_count, drafts);
+
+        int pool = msg_value - create_fee;
+        throw_unless(error::not_enough_ton, pool >= reward);
+
+        var (next_id, set_code, receipt_code) = load_data();
+        cell state_init = set_state_init(next_id, set_code, receipt_code);
+
+        cell body = begin_cell()
+            .store_uint(op::init_set, 32)
+            .store_slice(sender_address)
+            .store_coins(reward)
+            .store_coins(pool)
+            .store_uint(question_count, 8)
+            .store_dict(questions)
+            .end_cell();
+
+        ;; Mode 64 forwards everything that came in; the set keeps what its own gas doesn't use.
+        send_deploy(address_of(state_init), 0, state_init, body, 64);
+
+        save_data(next_id + 1, set_code, receipt_code);
+        return ();
+    }
+
+    throw(0xffff);
+}
+
+;; -----------------------------------------
+;; 4. GETTERS
+;; -----------------------------------------
+
+int get_set_count() method_id {
+    var (next_id, _, _) = load_data();
+    return next_id;
+}
+
+slice get_set_address(int set_id) method_id {
+    var (_, set_code, receipt_code) = load_data();
+    return address_of(set_state_init(set_id, set_code, receipt_code));
+}

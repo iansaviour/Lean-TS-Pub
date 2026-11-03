@@ -1,0 +1,147 @@
+;; -----------------------------------------
+;; iansaviour
+;; Shared by master.fc, set.fc and receipt.fc.
+;; -----------------------------------------
+
+int equal_slices (slice a, slice b) asm "SDEQ";
+
+;; -----------------------------------------
+;; 0. CONSTANTS
+;; -----------------------------------------
+
+;; Sent by wallets
+const int op::create_set = 1;   ;; wallet -> master
+const int op::answer = 2;       ;; wallet -> set
+const int op::close_set = 4;    ;; creator wallet -> set
+
+;; Sent between the contracts
+const int op::init_set = 0x10;  ;; master -> set (deploy)
+const int op::register = 0x11;  ;; set -> receipt (deploy on first answer)
+const int op::confirm = 0x12;   ;; receipt -> set, first answer from this voter
+const int op::duplicate = 0x13; ;; receipt -> set, voter already answered
+
+const int error::not_allowed = 401;
+const int error::not_found = 402;
+const int error::closed = 403;
+const int error::bad_choice = 405;
+const int error::bad_question = 406;
+const int error::bad_options = 407;
+const int error::not_enough_ton = 408;
+const int error::bad_set = 409;
+const int error::already_initialized = 410;
+const int error::busy = 411;            ;; every remaining reward is reserved by an answer in flight
+
+const int create_fee = 50000000;        ;; 0.05 TON: master + set gas, the rest stays on the set for storage
+const int min_answer_value = 50000000;  ;; 0.05 TON: four hops plus the receipt's storage reserve
+const int receipt_storage = 10000000;   ;; 0.01 TON kept on every receipt so it is never frozen
+
+const int max_question_bytes = 100;
+const int max_option_bytes = 20;
+const int min_options = 2;
+const int max_options = 5;
+const int min_questions = 1;
+const int max_questions = 5;
+
+;; -----------------------------------------
+;; 1. QUESTION CELL
+;; -----------------------------------------
+;; option_count:uint8  ^text  ^options  ^votes (5 x uint32)
+
+(int, cell, cell, cell) unpack_question(cell q) inline {
+    slice s = q.begin_parse();
+    return (
+        s~load_uint(8), ;; option_count
+        s~load_ref(),   ;; text
+        s~load_ref(),   ;; options
+        s~load_ref()    ;; votes
+    );
+}
+
+cell pack_question(int option_count, cell text, cell options, cell votes) inline {
+    return begin_cell()
+        .store_uint(option_count, 8)
+        .store_ref(text)
+        .store_ref(options)
+        .store_ref(votes)
+        .end_cell();
+}
+
+;; -----------------------------------------
+;; 2. ADDRESSES
+;; -----------------------------------------
+;; A child's address is the hash of its code and initial data, so anyone who knows
+;; the code can compute it without asking the chain.
+
+cell pack_state_init(cell code, cell data) inline {
+    return begin_cell()
+        .store_uint(0, 2)   ;; no split_depth, no special
+        .store_dict(code)
+        .store_dict(data)
+        .store_uint(0, 1)   ;; no libraries
+        .end_cell();
+}
+
+slice address_of(cell state_init) inline {
+    return begin_cell()
+        .store_uint(4, 3)   ;; addr_std$10, no anycast
+        .store_int(0, 8)    ;; workchain 0
+        .store_uint(cell_hash(state_init), 256)
+        .end_cell()
+        .begin_parse();
+}
+
+;; Initial data of set #id. Everything else arrives with op::init_set.
+cell set_init_data(slice master, int set_id, cell receipt_code) inline {
+    return begin_cell()
+        .store_slice(master)
+        .store_uint(set_id, 32)
+        .store_ref(receipt_code)
+        .store_uint(0, 1)   ;; not initialized
+        .end_cell();
+}
+
+;; Initial data of the receipt for (set, voter).
+cell receipt_init_data(slice set_address, slice voter) inline {
+    return begin_cell()
+        .store_slice(set_address)
+        .store_slice(voter)
+        .store_uint(0, 1)   ;; not answered
+        .end_cell();
+}
+
+;; -----------------------------------------
+;; 3. SENDING
+;; -----------------------------------------
+
+;; Plain TON, non-bounceable, so a payout can't come back after the pool was reduced
+() send_ton(slice to, int amount, int mode) impure inline {
+    send_raw_message(begin_cell()
+        .store_uint(0x10, 6)
+        .store_slice(to)
+        .store_coins(amount)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .end_cell(), mode);
+}
+
+;; Bounceable message to another contract of this system, body in a ref
+() send_body(slice to, int amount, cell body, int mode) impure inline {
+    send_raw_message(begin_cell()
+        .store_uint(0x18, 6)
+        .store_slice(to)
+        .store_coins(amount)
+        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .store_ref(body)
+        .end_cell(), mode);
+}
+
+;; Same, with a StateInit so the target is deployed if it doesn't exist yet
+() send_deploy(slice to, int amount, cell state_init, cell body, int mode) impure inline {
+    send_raw_message(begin_cell()
+        .store_uint(0x18, 6)
+        .store_slice(to)
+        .store_coins(amount)
+        .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+        .store_ref(state_init)
+        .store_ref(body)
+        .end_cell(), mode);
+}

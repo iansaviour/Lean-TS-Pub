@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { Address } from '@ton/core';
 import type { Cell } from '@ton/core';
-import { CONTRACT_ADDRESS, EXPLORER, NETWORK_CHAIN, NETWORK_LABEL } from './config';
-import { readContract } from './contract';
+import { DEPLOY_VALUE, EXPLORER, NETWORK_CHAIN, NETWORK_LABEL } from './config';
+import { formatTon, friendlyAddress, MASTER_ADDRESS, masterInit, readContract, stateInitBoc } from './contract';
 import type { ContractState } from './contract';
 import CreateQuestion from './CreateQuestion';
 import Home from './Home';
@@ -12,9 +12,18 @@ import type { Messages } from './messages';
 import QuestionCard from './QuestionCard';
 
 const REFRESH_MS = 15_000;
-const AFTER_SEND_MS = 8_000;
+// An answer travels wallet → set → receipt → set → wallet, so give it a few blocks.
+const AFTER_SEND_MS = 12_000;
 
-export type SendMessage = (body: Cell, amount: bigint, label: string) => Promise<boolean>;
+export type Outgoing = {
+    to: Address;
+    body?: Cell;
+    amount: bigint;
+    label: string;
+    stateInit?: string;
+};
+
+export type SendMessage = (message: Outgoing) => Promise<boolean>;
 
 export type Page = 'home' | 'create' | 'list';
 
@@ -72,15 +81,15 @@ export default function Questionnaire() {
     );
     const onNetwork = wallet?.account.chain === NETWORK_CHAIN;
 
+    // Receipts are per wallet, so the wallet is part of what gets read.
     const refresh = useCallback(async () => {
-        if (!CONTRACT_ADDRESS) return;
         try {
-            setState(await readContract(CONTRACT_ADDRESS));
+            setState(await readContract(walletAddress));
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : '');
         }
-    }, []);
+    }, [walletAddress]);
 
     useEffect(() => {
         refresh();
@@ -88,7 +97,7 @@ export default function Questionnaire() {
         return () => clearInterval(timer);
     }, [refresh]);
 
-    const send: SendMessage = async (body, amount, label) => {
+    const send: SendMessage = async ({ to, body, amount, label, stateInit }) => {
         if (!walletAddress || !onNetwork) return false;
         setBusy(true);
         setStatus(t.txWaiting(label));
@@ -98,9 +107,10 @@ export default function Questionnaire() {
                 network: NETWORK_CHAIN,
                 messages: [
                     {
-                        address: CONTRACT_ADDRESS,
+                        address: friendlyAddress(to),
                         amount: amount.toString(),
-                        payload: body.toBoc().toString('base64'),
+                        payload: body?.toBoc().toString('base64'),
+                        stateInit,
                     },
                 ],
             });
@@ -118,7 +128,16 @@ export default function Questionnaire() {
         }
     };
 
-    const canAct = Boolean(walletAddress && onNetwork && state?.kind === 'ready') && !busy;
+    const walletReady = Boolean(walletAddress && onNetwork) && !busy;
+    const canAct = walletReady && state?.kind === 'ready';
+
+    const deployMaster = () =>
+        send({
+            to: MASTER_ADDRESS,
+            amount: DEPLOY_VALUE,
+            label: t.deployTxLabel,
+            stateInit: stateInitBoc(masterInit),
+        });
 
     return (
         <div className="page">
@@ -136,7 +155,7 @@ export default function Questionnaire() {
             {wallet && !onNetwork && <p className="notice error">{t.wrongNetwork}</p>}
             {status && <p className="notice">{status}</p>}
 
-            <ContractNotice state={state} error={error} />
+            <ContractNotice state={state} error={error} canDeploy={walletReady} onDeploy={deployMaster} />
 
             {page === 'home' && <Home state={state} walletConnected={Boolean(wallet)} go={go} />}
 
@@ -179,18 +198,14 @@ export default function Questionnaire() {
             )}
 
             <footer className="footer muted">
-                {CONTRACT_ADDRESS ? (
-                    <a
-                        href={`${EXPLORER}/address/${CONTRACT_ADDRESS}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={CONTRACT_ADDRESS}
-                    >
-                        {t.contractAddress}
-                    </a>
-                ) : (
-                    t.contractAddressMissing
-                )}
+                <a
+                    href={`${EXPLORER}/address/${friendlyAddress(MASTER_ADDRESS)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={friendlyAddress(MASTER_ADDRESS)}
+                >
+                    {t.contractAddress}
+                </a>
             </footer>
 
             <nav className="bottom-nav">
@@ -246,11 +261,15 @@ function SetDetail({ setId, state, walletAddress, canAct, send }: DetailProps) {
     );
 }
 
-function ContractNotice({ state, error }: { state: ContractState | null; error: string | null }) {
+type NoticeProps = {
+    state: ContractState | null;
+    error: string | null;
+    canDeploy: boolean;
+    onDeploy: () => void;
+};
+
+function ContractNotice({ state, error, canDeploy, onDeploy }: NoticeProps) {
     const { t } = useI18n();
-    if (!CONTRACT_ADDRESS) {
-        return <p className="notice error">{t.noAddress}</p>;
-    }
     if (error !== null) {
         return <p className="notice error">{error || t.readFailed}</p>;
     }
@@ -258,10 +277,15 @@ function ContractNotice({ state, error }: { state: ContractState | null; error: 
         return <p className="notice">{t.reading}</p>;
     }
     if (state.kind === 'missing') {
-        return <p className="notice error">{t.missing}</p>;
-    }
-    if (state.kind === 'empty-data') {
-        return <p className="notice error">{t.emptyData}</p>;
+        return (
+            <div className="notice error">
+                <p>{t.missing}</p>
+                <button type="button" className="primary" disabled={!canDeploy} onClick={onDeploy}>
+                    {t.deployButton(formatTon(DEPLOY_VALUE))}
+                </button>
+                {!canDeploy && <p className="muted">{t.deployNeedsWallet}</p>}
+            </div>
+        );
     }
     return null;
 }

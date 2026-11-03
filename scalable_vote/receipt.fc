@@ -1,0 +1,81 @@
+#include "imports/stdlib.fc";
+#include "common.fc";
+
+;; -----------------------------------------
+;; iansaviour
+;; Receipt: one contract per (set, voter), deployed by the set on the first answer.
+;; Its "answered" flag replaces the answered dict of the single-contract version.
+;; -----------------------------------------
+
+;; -----------------------------------------
+;; 1. STORAGE
+;; -----------------------------------------
+;; set_address | voter | answered:uint1
+
+(slice, slice, int) load_data() inline {
+    slice ds = get_data().begin_parse();
+    return (
+        ds~load_msg_addr(),
+        ds~load_msg_addr(),
+        ds~load_uint(1)
+    );
+}
+
+() save_data(slice set_address, slice voter, int answered) impure inline {
+    set_data(begin_cell()
+        .store_slice(set_address)
+        .store_slice(voter)
+        .store_uint(answered, 1)
+        .end_cell());
+}
+
+;; -----------------------------------------
+;; 2. MESSAGES
+;; -----------------------------------------
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) {
+        return ();
+    }
+
+    slice sender_address = cs~load_msg_addr();
+    int op = in_msg_body~load_uint(32);
+
+    var (set_address, voter, answered) = load_data();
+    throw_unless(error::not_allowed, equal_slices(sender_address, set_address));
+
+    ;; Op 0x11: The set forwards an answer from this voter.
+    ;; Body: choice0:uint8 ... choiceN:uint8
+    if (op == op::register) {
+        if (answered) {
+            send_body(set_address, 0,
+                begin_cell().store_uint(op::duplicate, 32).store_slice(voter).end_cell(), 64);
+            return ();
+        }
+
+        save_data(set_address, voter, 1);
+
+        ;; Keep a little TON so the receipt is never frozen and the mark never disappears.
+        raw_reserve(receipt_storage, 0);
+        send_body(set_address, 0,
+            begin_cell().store_uint(op::confirm, 32).store_slice(voter).store_slice(in_msg_body).end_cell(), 128);
+        return ();
+    }
+
+    throw(0xffff);
+}
+
+;; -----------------------------------------
+;; 3. GETTERS
+;; -----------------------------------------
+
+;; Returns set_address, voter, answered
+(slice, slice, int) get_receipt() method_id {
+    return load_data();
+}

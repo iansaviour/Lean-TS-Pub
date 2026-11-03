@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import type { Address } from '@ton/core';
-import { ANSWER_VALUE, CLOSE_VALUE } from './config';
+import { ANSWER_VALUE, CLOSE_VALUE, RECEIPT_STORAGE } from './config';
 import {
     answerBody,
-    answerKey,
     closeSetBody,
     completionCount,
     formatTon,
+    freePool,
     shortAddress,
 } from './contract';
 import type { QuestionnaireSet } from './contract';
@@ -16,7 +16,8 @@ import { setHash, setUrl } from './routes';
 
 type Props = {
     set: QuestionnaireSet;
-    answered: Set<bigint>;
+    // Ids of the sets the connected wallet has a receipt for
+    answered: Set<number>;
     walletAddress: Address | null;
     canAct: boolean;
     send: SendMessage;
@@ -33,11 +34,13 @@ export default function QuestionCard({
 }: Props) {
     const { t } = useI18n();
     const completions = completionCount(set);
-    const hasAnswered = walletAddress ? answered.has(answerKey(set.id, walletAddress)) : false;
+    const hasAnswered = walletAddress ? answered.has(set.id) : false;
     const isCreator = walletAddress ? walletAddress.equals(set.creator) : false;
     const paidLeft =
-        set.rewardPerCompletion > 0n ? set.rewardPool / set.rewardPerCompletion : null;
-    const canAnswer = canAct && set.isOpen && !hasAnswered;
+        set.rewardPerCompletion > 0n ? freePool(set) / set.rewardPerCompletion : null;
+    // Every remaining reward is reserved by answers in flight; the set rejects new ones until they settle.
+    const reserved = set.isOpen && paidLeft === 0n;
+    const canAnswer = canAct && set.isOpen && !hasAnswered && !reserved;
     const rewardBelowCost = set.rewardPerCompletion <= ANSWER_VALUE;
     const preview = set.questions[0]?.text ?? `Set #${set.id}`;
 
@@ -56,11 +59,12 @@ export default function QuestionCard({
             setIncomplete(true);
             return;
         }
-        void send(
-            answerBody(set.id, choices as number[]),
-            ANSWER_VALUE,
-            t.answerTxLabel(set.id),
-        );
+        void send({
+            to: set.address,
+            body: answerBody(choices as number[]),
+            amount: ANSWER_VALUE,
+            label: t.answerTxLabel(set.id),
+        });
     };
 
     return (
@@ -166,9 +170,12 @@ export default function QuestionCard({
                 <p className="notice error">{t.rewardBelowCost(formatTon(ANSWER_VALUE))}</p>
             )}
             {hasAnswered && <p className="notice">{t.alreadyAnswered}</p>}
+            {detail && reserved && !hasAnswered && <p className="notice">{t.busy}</p>}
             {detail && canAnswer && (
                 <>
-                    <p className="muted">{t.answerCost(formatTon(ANSWER_VALUE))}</p>
+                    <p className="muted">
+                        {t.answerCost(formatTon(ANSWER_VALUE), formatTon(RECEIPT_STORAGE))}
+                    </p>
                     {incomplete && <p className="notice error">{t.errIncomplete}</p>}
                     <button type="button" className="primary full-width" onClick={submit}>
                         {t.submitAnswers}
@@ -187,7 +194,12 @@ export default function QuestionCard({
                     className="danger full-width"
                     disabled={!canAct}
                     onClick={() =>
-                        send(closeSetBody(set.id), CLOSE_VALUE, t.closeTxLabel(set.id))
+                        send({
+                            to: set.address,
+                            body: closeSetBody(),
+                            amount: CLOSE_VALUE,
+                            label: t.closeTxLabel(set.id),
+                        })
                     }
                 >
                     {t.closeButton}

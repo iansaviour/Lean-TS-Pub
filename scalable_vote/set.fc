@@ -1,0 +1,287 @@
+#include "imports/stdlib.fc";
+#include "common.fc";
+
+;; -----------------------------------------
+;; iansaviour
+;; Set: one contract per questionnaire, deployed by the master.
+;; It never stores who answered; a receipt contract per voter does that.
+;; -----------------------------------------
+
+;; -----------------------------------------
+;; 1. STORAGE
+;; -----------------------------------------
+;; master | set_id:uint32 | ^receipt_code | initialized:uint1
+;; after op::init_set also:
+;; creator | reward:coins | pool:coins | pending:uint32 | is_open:uint1 | question_count:uint8
+;;   questions:(HashmapE 8 ^Question)
+;;
+;; pool: TON still owed as rewards, including answers in flight.
+;; pending: answers sent to a receipt that hasn't replied yet. Each one reserves one reward.
+;;
+;; Answer body:
+;;   choice0:uint8 ... choiceN:uint8 (one per question, in order)
+
+global slice master;
+global int set_id;
+global cell receipt_code;
+global int initialized;
+
+global slice creator;
+global int reward;
+global int pool;
+global int pending;
+global int is_open;
+global int question_count;
+global cell questions;
+
+() load_data() impure inline {
+    slice ds = get_data().begin_parse();
+    master = ds~load_msg_addr();
+    set_id = ds~load_uint(32);
+    receipt_code = ds~load_ref();
+    initialized = ds~load_uint(1);
+    if (initialized) {
+        creator = ds~load_msg_addr();
+        reward = ds~load_coins();
+        pool = ds~load_coins();
+        pending = ds~load_uint(32);
+        is_open = ds~load_uint(1);
+        question_count = ds~load_uint(8);
+        questions = ds~load_dict();
+    }
+}
+
+() save_data() impure inline {
+    builder b = begin_cell()
+        .store_slice(master)
+        .store_uint(set_id, 32)
+        .store_ref(receipt_code)
+        .store_uint(initialized, 1);
+    if (initialized) {
+        b = b.store_slice(creator)
+            .store_coins(reward)
+            .store_coins(pool)
+            .store_uint(pending, 32)
+            .store_uint(is_open, 1)
+            .store_uint(question_count, 8)
+            .store_dict(questions);
+    }
+    set_data(b.end_cell());
+}
+
+;; -----------------------------------------
+;; 2. HELPERS
+;; -----------------------------------------
+
+cell receipt_state_init(slice voter) inline {
+    return pack_state_init(receipt_code, receipt_init_data(my_address(), voter));
+}
+
+;; Pool that isn't reserved for an answer in flight
+int free_pool() inline {
+    return pool - pending * reward;
+}
+
+;; Read one choice per question and check each against its option count.
+builder read_choices(slice body) impure inline {
+    builder b = begin_cell();
+    int i = 0;
+    repeat (question_count) {
+        int choice = body~load_uint(8);
+
+        (cell q, int found) = questions.udict_get_ref?(8, i);
+        throw_unless(error::not_found, found);
+
+        var (option_count, _, _, _) = unpack_question(q);
+        throw_unless(error::bad_choice, choice < option_count);
+
+        b = b.store_uint(choice, 8);
+        i += 1;
+    }
+    return b;
+}
+
+cell add_vote(cell votes, int choice) inline {
+    slice s = votes.begin_parse();
+    builder b = begin_cell();
+    int i = 0;
+    repeat (max_options) {
+        int v = s~load_uint(32);
+        if (i == choice) {
+            v += 1;
+        }
+        b = b.store_uint(v, 32);
+        i += 1;
+    }
+    return b.end_cell();
+}
+
+;; Choices were checked by read_choices before they went to the receipt.
+() apply_votes(slice choices) impure inline {
+    int i = 0;
+    repeat (question_count) {
+        int choice = choices~load_uint(8);
+        (cell q, _) = questions.udict_get_ref?(8, i);
+        var (option_count, text, options, votes) = unpack_question(q);
+        questions~udict_set_ref(8, i, pack_question(option_count, text, options, add_vote(votes, choice)));
+        i += 1;
+    }
+}
+
+;; Close once the pool can't pay another answer. Reservations don't count here:
+;; an answer in flight may still turn out to be a duplicate and give its reward back.
+;; Once closed and nothing is in flight, whatever is left goes back to the creator.
+() settle() impure inline {
+    if ((is_open == 1) & (reward > 0) & (pool < reward)) {
+        is_open = 0;
+    }
+    if ((is_open == 0) & (pending == 0) & (pool > 0)) {
+        send_ton(creator, pool, 1);
+        pool = 0;
+    }
+}
+
+;; -----------------------------------------
+;; 3. MESSAGES
+;; -----------------------------------------
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    slice sender_address = cs~load_msg_addr();
+
+    load_data();
+
+    ;; A register message bounced: the receipt failed, so give its reward back to the pool.
+    ;; Bounced body: 0xffffffff, then the first 256 bits of what we sent.
+    if (flags & 1) {
+        in_msg_body~skip_bits(32);
+        if (in_msg_body~load_uint(32) == op::register) {
+            pending -= 1;
+            settle();
+            save_data();
+        }
+        return ();
+    }
+
+    int op = in_msg_body~load_uint(32);
+
+    ;; Op 0x10: Deploy message from the master, exactly once.
+    ;; Body: creator reward:coins pool:coins question_count:uint8 questions:dict
+    if (op == op::init_set) {
+        throw_unless(error::not_allowed, equal_slices(sender_address, master));
+        throw_if(error::already_initialized, initialized);
+
+        creator = in_msg_body~load_msg_addr();
+        reward = in_msg_body~load_coins();
+        pool = in_msg_body~load_coins();
+        question_count = in_msg_body~load_uint(8);
+        questions = in_msg_body~load_dict();
+        throw_unless(error::not_enough_ton, msg_value >= pool);
+
+        pending = 0;
+        is_open = 1;
+        initialized = 1;
+        save_data();
+        return ();
+    }
+
+    throw_unless(error::not_found, initialized);
+
+    ;; Op 2: Answer every question. Reserves one reward and asks the voter's receipt
+    ;; whether this is their first answer. Votes count only when the receipt confirms.
+    ;; Body: choice0:uint8 ... choiceN:uint8
+    if (op == op::answer) {
+        throw_unless(error::not_enough_ton, msg_value >= min_answer_value);
+        throw_unless(error::closed, is_open);
+        throw_unless(error::busy, (reward == 0) | (free_pool() >= reward));
+
+        builder choices = read_choices(in_msg_body);
+
+        pending += 1;
+        save_data();
+
+        cell state_init = receipt_state_init(sender_address);
+        send_deploy(address_of(state_init), 0, state_init,
+            begin_cell().store_uint(op::register, 32).store_builder(choices).end_cell(), 64);
+        return ();
+    }
+
+    ;; Op 0x12: The receipt was new. Count the votes and pay the reward.
+    ;; Body: voter choice0:uint8 ... choiceN:uint8
+    if (op == op::confirm) {
+        slice voter = in_msg_body~load_msg_addr();
+        throw_unless(error::not_allowed, equal_slices(sender_address, address_of(receipt_state_init(voter))));
+
+        apply_votes(in_msg_body);
+        pending -= 1;
+        pool -= reward;
+
+        send_ton(voter, reward, 64);
+        settle();
+        save_data();
+        return ();
+    }
+
+    ;; Op 0x13: The voter already answered. Release the reservation and refund the gas.
+    ;; Body: voter
+    if (op == op::duplicate) {
+        slice voter = in_msg_body~load_msg_addr();
+        throw_unless(error::not_allowed, equal_slices(sender_address, address_of(receipt_state_init(voter))));
+
+        pending -= 1;
+
+        send_ton(voter, 0, 64);
+        settle();
+        save_data();
+        return ();
+    }
+
+    ;; Op 4: Creator closes the set. Rewards for answers in flight stay reserved;
+    ;; settle() sends them back later if those answers turn out to be duplicates.
+    ;; Body: (empty)
+    if (op == op::close_set) {
+        throw_unless(error::not_allowed, equal_slices(sender_address, creator));
+        throw_unless(error::closed, is_open);
+
+        int refund = free_pool();
+        is_open = 0;
+        pool -= refund;
+
+        send_ton(sender_address, refund, 64);
+        save_data();
+        return ();
+    }
+
+    throw(0xffff);
+}
+
+;; -----------------------------------------
+;; 4. GETTERS
+;; -----------------------------------------
+
+;; Returns creator, reward, pool, pending, is_open, question_count, questions_dict
+(slice, int, int, int, int, int, cell) get_set() method_id {
+    load_data();
+    throw_unless(error::not_found, initialized);
+    return (creator, reward, pool, pending, is_open, question_count, questions);
+}
+
+;; Returns option_count, text, options, votes
+(int, cell, cell, cell) get_question(int question_index) method_id {
+    load_data();
+    throw_unless(error::not_found, initialized);
+    throw_unless(error::bad_set, question_index < question_count);
+    (cell q, int found) = questions.udict_get_ref?(8, question_index);
+    throw_unless(error::not_found, found);
+    return unpack_question(q);
+}
+
+slice get_receipt_address(slice voter) method_id {
+    load_data();
+    return address_of(receipt_state_init(voter));
+}

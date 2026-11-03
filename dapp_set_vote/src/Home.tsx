@@ -1,6 +1,6 @@
 import type { ContractState } from './contract';
 import { completionCount, formatTon } from './contract';
-import { ANSWER_VALUE, CREATE_FEE } from './config';
+import { ANSWER_VALUE, CREATE_FEE, RECEIPT_STORAGE } from './config';
 import { useI18n } from './i18n';
 import type { Page } from './Questionnaire';
 
@@ -25,7 +25,7 @@ export default function Home({ state, walletConnected, go }: Props) {
 
     const steps = [
         { title: t.stepCreateTitle, text: t.stepCreate(formatTon(CREATE_FEE), formatTon(ANSWER_VALUE)) },
-        { title: t.stepAnswerTitle, text: t.stepAnswer(formatTon(ANSWER_VALUE)) },
+        { title: t.stepAnswerTitle, text: t.stepAnswer(formatTon(ANSWER_VALUE), formatTon(RECEIPT_STORAGE)) },
         { title: t.stepCloseTitle, text: t.stepClose },
     ];
 

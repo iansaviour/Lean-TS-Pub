@@ -10,7 +10,7 @@ import {
     MIN_OPTIONS,
     MIN_QUESTIONS,
 } from './config';
-import { byteLength, createSetBody, formatTon } from './contract';
+import { byteLength, createSetBody, formatTon, MASTER_ADDRESS } from './contract';
 import type { QuestionDraft } from './contract';
 import { useI18n } from './i18n';
 import type { SendMessage } from './Questionnaire';
@@ -42,8 +42,8 @@ function emptyDraft(): DraftState {
 export default function CreateQuestion({ canAct, send, onCreated }: Props) {
     const { t } = useI18n();
     const [drafts, setDrafts] = useState<DraftState[]>([emptyDraft()]);
-    const [reward, setReward] = useState('0.04');
-    const [paidAnswers, setPaidAnswers] = useState('10');
+    const [reward, setReward] = useState('0.1');
+    const [paidAnswers, setPaidAnswers] = useState('5');
 
     const rewardNano = parseTon(reward);
     const answerCount = /^\d+$/.test(paidAnswers.trim()) ? BigInt(paidAnswers.trim()) : null;
@@ -90,7 +90,7 @@ export default function CreateQuestion({ canAct, send, onCreated }: Props) {
             options: draft.options.map((option) => option.trim()),
         }));
         const body = createSetBody(payload, rewardNano);
-        const sent = await send(body, total, t.createTxLabel);
+        const sent = await send({ to: MASTER_ADDRESS, body, amount: total, label: t.createTxLabel });
         if (sent) {
             setDrafts([emptyDraft()]);
             onCreated();

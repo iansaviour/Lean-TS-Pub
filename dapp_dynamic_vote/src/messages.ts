@@ -3,7 +3,7 @@ import { NETWORK, OTHER_NETWORK } from './config';
 export type Lang = 'id' | 'en';
 
 const id = {
-    appTitle: 'Kuesioner TON (Kontrak per Set)',
+    appTitle: 'Kuesioner TON',
     switchTo: 'Switch to English',
 
     navHome: 'Home',
@@ -109,7 +109,7 @@ const id = {
 export type Messages = typeof id;
 
 const en: Messages = {
-    appTitle: 'TON Questionnaire (Contract per Set)',
+    appTitle: 'TON Questionnaire',
     switchTo: 'Ganti ke Bahasa Indonesia',
 
     navHome: 'Home',

@@ -29,6 +29,7 @@ jobs:
             dapp_new_vote/package-lock.json
             dapp_set_vote/package-lock.json
             dapp_dynamic_vote/package-lock.json
+            dapp_survey/package-lock.json
       - run: npm ci
         working-directory: dapp
       - run: npm run build
@@ -49,14 +50,19 @@ jobs:
         working-directory: dapp_dynamic_vote
       - run: npm run build
         working-directory: dapp_dynamic_vote
+      - run: npm ci
+        working-directory: dapp_survey
+      - run: npm run build
+        working-directory: dapp_survey
       - name: Assemble site
         run: |
-          mkdir -p site/vote site/new-vote site/set-vote site/dynamic-vote
+          mkdir -p site/vote site/new-vote site/set-vote site/dynamic-vote site/survey
           cp -a dapp/dist/. site/
           cp -a dapp_vote/dist/. site/vote/
           cp -a dapp_new_vote/dist/. site/new-vote/
           cp -a dapp_set_vote/dist/. site/set-vote/
           cp -a dapp_dynamic_vote/dist/. site/dynamic-vote/
+          cp -a dapp_survey/dist/. site/survey/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

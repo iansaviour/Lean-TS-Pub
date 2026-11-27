@@ -1,0 +1,154 @@
+;; -----------------------------------------
+;; Shared constants and helpers for the SurveyDApp master
+;; and the per-survey Survey child contract.
+;;
+;; Separate from questionnaire.fc (VoteDApp / QuestionSet). A survey supports:
+;;   - choice questions where the respondent may pick several options (min..max)
+;;   - text questions answered with free text limited to min..max characters
+;; -----------------------------------------
+
+int equal_slices (slice a, slice b) asm "SDEQ";
+slice addr_none() asm "b{00} PUSHSLICE";
+
+;; Opcodes are different from VoteDApp/QuestionSet, so a message sent to the
+;; wrong kind of contract fails with 0xffff instead of being misread.
+const int op::create_survey = 0x11;
+const int op::submit = 0x12;
+const int op::change_owner = 0x13;
+const int op::close_survey = 0x14;
+const int op::init_survey = 0x15;      ;; master -> child, only once
+
+const int error::not_allowed = 401;
+const int error::not_found = 402;
+const int error::closed = 403;
+const int error::already_answered = 404;
+const int error::bad_choice = 405;     ;; unknown option, or selected count outside min..max
+const int error::bad_question = 406;
+const int error::bad_options = 407;
+const int error::not_enough_ton = 408;
+const int error::bad_survey = 409;
+const int error::bad_text = 410;       ;; text outside min..max characters, or malformed
+const int error::missing_answer = 411;
+const int error::char_not_allowed = 412;   ;; ascii_only text with emoji, é, “ ” ... (see is_printable_ascii)
+
+const int qtype::choice = 0;           ;; select min..max options (max > 1 = multi-select)
+const int qtype::text = 1;             ;; free text of min..max characters
+
+const int create_fee = 50000000;       ;; 0.05 TON total: master_fee + reserve left in the child
+const int master_fee = 10000000;       ;; 0.01 TON kept by the master for its gas
+const int min_submit_value = 50000000; ;; 0.05 TON, unused part returns with the reward
+const int storage_deposit = 10000000;  ;; 0.01 TON kept per response to pay storage for its answers
+
+const int max_question_bytes = 100;
+const int max_option_bytes = 20;
+const int min_options = 2;
+const int max_options = 5;
+const int min_questions = 1;
+const int max_questions = 10;
+const int max_text_chars = 200;
+const int max_utf8_bytes = 4;          ;; one UTF-8 character is at most 4 bytes
+const int snake_cell_bytes = 127;      ;; bytes per cell in a snake string (1023 bits / 8)
+
+;; -----------------------------------------
+;; Survey storage (also the StateInit data, so the master can compute the address)
+;; -----------------------------------------
+;; master | survey_id:uint32 | creator | reward_per_completion:coins | reward_pool:coins
+;; | is_open:uint1 | question_count:uint8 | response_count:uint32
+;; | questions:(HashmapE 8 ^Question)
+;; | answered:(HashmapE 256 uint32)       key = hash(respondent), value = response index
+;; | responses:(HashmapE 32 ^Response)    key = response index
+;;
+;; Before init: creator = addr_none, everything else 0 / empty.
+;;
+;; Question cell:
+;;   qtype:uint8 min_count:uint16 max_count:uint16 ascii_only:uint1 ^text [^options ^votes]
+;;   choice: min/max = how many options must be selected; has ^options and ^votes(5 x uint32);
+;;           ascii_only is always 0
+;;   text:   min/max = how many characters the answer must have; no options / votes;
+;;           ascii_only = 1 allows only letters, digits, space and normal punctuation
+;;           (printable ASCII, see is_printable_ascii in survey.fc)
+;;
+;; Response cell:
+;;   respondent:MsgAddress ^answers(HashmapE 8 ^Answer), one answer per question
+;;
+;; Answer cell:
+;;   choice: mask:uint8          bit i set = option i selected
+;;   text:   UTF-8 bytes, snake  (continues in at most one ref)
+
+cell pack_survey_data(slice master, int survey_id, slice creator, int reward, int pool, int is_open,
+                      int question_count, int response_count, cell questions, cell answered, cell responses) inline {
+    return begin_cell()
+        .store_slice(master)
+        .store_uint(survey_id, 32)
+        .store_slice(creator)
+        .store_coins(reward)
+        .store_coins(pool)
+        .store_uint(is_open, 1)
+        .store_uint(question_count, 8)
+        .store_uint(response_count, 32)
+        .store_dict(questions)
+        .store_dict(answered)
+        .store_dict(responses)
+        .end_cell();
+}
+
+cell survey_state_init(cell survey_code, slice master, int survey_id) inline {
+    cell data = pack_survey_data(master, survey_id, addr_none(), 0, 0, 0, 0, 0, new_dict(), new_dict(), new_dict());
+    return begin_cell()
+        .store_uint(0, 2)       ;; split_depth, special
+        .store_dict(survey_code)
+        .store_dict(data)
+        .store_uint(0, 1)       ;; library
+        .end_cell();
+}
+
+slice state_init_address(cell state_init) inline {
+    return begin_cell()
+        .store_uint(4, 3)       ;; addr_std$10, anycast nothing
+        .store_int(0, 8)        ;; workchain 0
+        .store_uint(cell_hash(state_init), 256)
+        .end_cell()
+        .begin_parse();
+}
+
+cell pack_question(int qtype, int min_count, int max_count, int ascii_only,
+                   cell text, cell options, cell votes) inline {
+    builder b = begin_cell()
+        .store_uint(qtype, 8)
+        .store_uint(min_count, 16)
+        .store_uint(max_count, 16)
+        .store_uint(ascii_only, 1)
+        .store_ref(text);
+    if (qtype == qtype::choice) {
+        b = b.store_ref(options).store_ref(votes);
+    }
+    return b.end_cell();
+}
+
+;; Returns qtype, min_count, max_count, ascii_only, text, options, votes.
+;; options and votes are null for text questions.
+(int, int, int, int, cell, cell, cell) unpack_question(cell q) inline {
+    slice s = q.begin_parse();
+    int qtype = s~load_uint(8);
+    int min_count = s~load_uint(16);
+    int max_count = s~load_uint(16);
+    int ascii_only = s~load_uint(1);
+    cell text = s~load_ref();
+    cell options = null();
+    cell votes = null();
+    if (qtype == qtype::choice) {
+        options = s~load_ref();
+        votes = s~load_ref();
+    }
+    return (qtype, min_count, max_count, ascii_only, text, options, votes);
+}
+
+;; Non-bounceable so a failed delivery can't bounce TON back after the pool was already reduced
+() send_ton(slice to, int amount, int mode) impure inline {
+    send_raw_message(begin_cell()
+        .store_uint(0x10, 6)
+        .store_slice(to)
+        .store_coins(amount)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .end_cell(), mode);
+}

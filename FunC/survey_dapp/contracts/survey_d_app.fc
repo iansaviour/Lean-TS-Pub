@@ -1,0 +1,202 @@
+#include "imports/stdlib.fc";
+#include "imports/survey_common.fc";
+
+;; -----------------------------------------
+;; iansaviour
+;; SurveyDApp master (factory).
+;; Every survey is deployed as its own Survey contract, so this contract's
+;; storage never grows with the number of surveys or respondents.
+;; Separate from VoteDApp: surveys have multi-select and free-text questions.
+;; -----------------------------------------
+
+;; -----------------------------------------
+;; 1. STORAGE
+;; -----------------------------------------
+;; owner_address | next_survey_id:uint32 | ^survey_code
+;;
+;; Create body:
+;;   reward:coins  question_count:uint8  ^drafts
+;;   drafts = HashmapE 8 ^Draft, keys 0 .. question_count-1
+;;   Draft  = qtype:uint8 min_count:uint16 max_count:uint16 ascii_only:uint1 ^text [^options]
+;;            (^options only for choice questions, ascii_only only for text questions)
+
+(slice, int, cell) load_data() inline {
+    var ds = get_data().begin_parse();
+    return (
+        ds~load_msg_addr(),
+        ds~load_uint(32),
+        ds~load_ref()
+    );
+}
+
+() save_data(slice owner_address, int next_id, cell survey_code) impure inline {
+    set_data(begin_cell()
+        .store_slice(owner_address)
+        .store_uint(next_id, 32)
+        .store_ref(survey_code)
+        .end_cell());
+}
+
+;; -----------------------------------------
+;; 2. VALIDATION
+;; -----------------------------------------
+
+() check_question_text(cell text) impure inline {
+    slice s = text.begin_parse();
+    int bits = s.slice_bits();
+    throw_unless(error::bad_question,
+        (bits > 0) & (bits <= max_question_bytes * 8) & (bits % 8 == 0) & (s.slice_refs() == 0));
+}
+
+int check_options(cell options) impure inline {
+    slice s = options.begin_parse();
+    throw_unless(error::bad_options, s.slice_refs() == 0);
+    int count = s~load_uint(8);
+    throw_unless(error::bad_options, (count >= min_options) & (count <= max_options));
+    repeat (count) {
+        int len = s~load_uint(8);
+        throw_unless(error::bad_options, (len > 0) & (len <= max_option_bytes));
+        s~skip_bits(len * 8);
+    }
+    throw_unless(error::bad_options, s.slice_empty?());
+    return count;
+}
+
+cell empty_votes() inline {
+    return begin_cell().store_uint(0, 32 * max_options).end_cell();
+}
+
+;; Turn one draft from the create message into a stored question cell.
+cell build_question(cell draft) impure inline {
+    slice ds = draft.begin_parse();
+    int qtype = ds~load_uint(8);
+    int min_count = ds~load_uint(16);
+    int max_count = ds~load_uint(16);
+    int ascii_only = ds~load_uint(1);
+    cell text = ds~load_ref();
+
+    check_question_text(text);
+    throw_unless(error::bad_question, (qtype == qtype::choice) | (qtype == qtype::text));
+    throw_unless(error::bad_question, (max_count > 0) & (min_count <= max_count));
+
+    cell options = null();
+    cell votes = null();
+    if (qtype == qtype::choice) {
+        options = ds~load_ref();
+        int option_count = check_options(options);
+        ;; max_count = 1 is a single-choice question, > 1 lets the respondent pick several
+        throw_unless(error::bad_options, max_count <= option_count);
+        throw_unless(error::bad_question, ascii_only == 0);
+        votes = empty_votes();
+    } else {
+        throw_unless(error::bad_question, max_count <= max_text_chars);
+    }
+    throw_unless(error::bad_question, ds.slice_empty?());
+
+    return pack_question(qtype, min_count, max_count, ascii_only, text, options, votes);
+}
+
+;; Build the questions dict from the create-message drafts dict.
+cell build_questions(int question_count, cell drafts) impure inline {
+    throw_unless(error::bad_survey, (question_count >= min_questions) & (question_count <= max_questions));
+
+    cell questions = new_dict();
+    int i = 0;
+    repeat (question_count) {
+        (cell draft, int found) = drafts.udict_get_ref?(8, i);
+        throw_unless(error::bad_survey, found);
+
+        questions~udict_set_ref(8, i, build_question(draft));
+        i += 1;
+    }
+    return questions;
+}
+
+;; -----------------------------------------
+;; 3. MESSAGES
+;; -----------------------------------------
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) {
+        return ();
+    }
+
+    slice sender_address = cs~load_msg_addr();
+    int op = in_msg_body~load_uint(32);
+
+    var (owner_address, next_id, survey_code) = load_data();
+
+    ;; Create a survey -> deploys a new Survey contract.
+    ;; msg_value - create_fee becomes the reward pool held by that contract.
+    ;; Body: reward_per_completion:coins question_count:uint8 ^drafts
+    if (op == op::create_survey) {
+        int reward = in_msg_body~load_coins();
+        int question_count = in_msg_body~load_uint(8);
+        cell drafts = in_msg_body~load_ref();
+
+        cell questions = build_questions(question_count, drafts);
+
+        int pool = msg_value - create_fee;
+        throw_unless(error::not_enough_ton, pool >= reward);
+
+        cell state_init = survey_state_init(survey_code, my_address(), next_id);
+        slice survey_address = state_init_address(state_init);
+
+        cell init_body = begin_cell()
+            .store_uint(op::init_survey, 32)
+            .store_slice(sender_address)
+            .store_coins(reward)
+            .store_coins(pool)
+            .store_uint(question_count, 8)
+            .store_ref(questions)
+            .end_cell();
+
+        send_raw_message(begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(survey_address)
+            .store_coins(msg_value - master_fee)
+            .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1) ;; state_init + body as refs
+            .store_ref(state_init)
+            .store_ref(init_body)
+            .end_cell(), 0);
+
+        save_data(owner_address, next_id + 1, survey_code);
+        return ();
+    }
+
+    ;; Change contract owner
+    ;; Body: new_owner:MsgAddress
+    if (op == op::change_owner) {
+        throw_unless(error::not_allowed, equal_slices(sender_address, owner_address));
+        slice new_owner = in_msg_body~load_msg_addr();
+        save_data(new_owner, next_id, survey_code);
+        return ();
+    }
+
+    throw(0xffff);
+}
+
+;; -----------------------------------------
+;; 4. GETTERS
+;; -----------------------------------------
+
+int get_survey_count() method_id {
+    var (_, next_id, _) = load_data();
+    return next_id;
+}
+
+slice get_survey_address(int survey_id) method_id {
+    var (_, _, survey_code) = load_data();
+    return state_init_address(survey_state_init(survey_code, my_address(), survey_id));
+}
+
+slice get_owner() method_id {
+    var (owner_address, _, _) = load_data();
+    return owner_address;
+}
